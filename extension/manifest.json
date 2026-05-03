@@ -5,7 +5,7 @@
   "description": "Your AI browser assistant — explains any page, selection, or video in simple language.",
 
   "permissions": [
-    "activeTab",
+    "tabs",
     "scripting",
     "storage",
     "sidePanel"

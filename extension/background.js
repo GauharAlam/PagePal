@@ -110,9 +110,25 @@ async function handleGetPageContent(sendResponse) {
       return;
     }
 
-    const response = await sendMessageToTab(activeTab.id, {
+    let response = await sendMessageToTab(activeTab.id, {
       type: "EXTRACT_PAGE_TEXT",
     });
+
+    // If the content script isn't there (e.g. tab was open before extension installed), inject it dynamically
+    if (response && response.error && response.error.includes("Receiving end does not exist")) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: activeTab.id },
+          files: ["content.js"],
+        });
+        // Try asking for content again
+        response = await sendMessageToTab(activeTab.id, {
+          type: "EXTRACT_PAGE_TEXT",
+        });
+      } catch (injectErr) {
+        console.error("[PagePal] Auto-injection failed:", injectErr);
+      }
+    }
 
     if (response && response.ok) {
       cachedPageContent = response.data;
@@ -139,9 +155,24 @@ async function handleGetSelectedText(sendResponse) {
       return;
     }
 
-    const response = await sendMessageToTab(activeTab.id, {
+    let response = await sendMessageToTab(activeTab.id, {
       type: "GET_SELECTED_TEXT",
     });
+
+    // Auto-inject if missing
+    if (response && response.error && response.error.includes("Receiving end does not exist")) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: activeTab.id },
+          files: ["content.js"],
+        });
+        response = await sendMessageToTab(activeTab.id, {
+          type: "GET_SELECTED_TEXT",
+        });
+      } catch (injectErr) {
+        console.error("[PagePal] Auto-injection failed:", injectErr);
+      }
+    }
 
     if (response && response.ok) {
       sendResponse({ ok: true, data: response.data });

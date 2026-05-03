@@ -27,9 +27,9 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 // Priority list — tried in order until one succeeds
 const MODEL_FALLBACK_LIST = [
   process.env.GEMINI_MODEL, // user override (from .env)
-  "gemini-2.0-flash-lite", // stable, available to all new users
-  "gemini-1.5-flash-latest", // older but widely available
-  "gemini-1.5-flash-8b", // smallest / most permissive tier
+  "gemini-1.5-flash", // fastest, universally available
+  "gemini-1.5-pro", // better reasoning
+  "gemini-1.0-pro", // oldest legacy fallback
 ].filter(Boolean); // remove undefined if GEMINI_MODEL not set
 
 let geminiClient = null;

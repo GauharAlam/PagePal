@@ -39,7 +39,13 @@ const grokClient = new OpenAI({
   baseURL: "https://api.x.ai/v1",
 });
 
+// ── NVIDIA NIM (OpenAI-compatible endpoint) ───────────────────────────────
+const nvidiaClient = new OpenAI({
+  apiKey: process.env.NVIDIA_API_KEY || "not-configured",
+  baseURL: "https://integrate.api.nvidia.com/v1",
+});
+
 // Note: Gemini uses its own SDK (@google/generative-ai) and is initialised
 // lazily inside gemini.model.js — no client object lives here.
 
-module.exports = { openaiClient, deepseekClient, grokClient };
+module.exports = { openaiClient, deepseekClient, grokClient, nvidiaClient };

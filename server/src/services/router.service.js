@@ -144,7 +144,7 @@ function selectModel(
   // ── Rule 1: Explicit quality preference ──────────────────────────────────
   if (userPreference === "best_quality") {
     return {
-      model: "gemini",
+      model: "nvidia",
       reason: "User requested best quality output",
       confidence: "high",
     };
@@ -162,9 +162,9 @@ function selectModel(
   // ── Rule 3: YouTube content ───────────────────────────────────────────────
   if (isYouTube === true) {
     return {
-      model: "gemini",
+      model: "nvidia",
       reason:
-        "YouTube content benefits from Gemini's long-context understanding",
+        "YouTube content benefits from NVIDIA's large context capabilities",
       confidence: "high",
     };
   }
@@ -172,8 +172,8 @@ function selectModel(
   // ── Rule 4: Large content (>1500 estimated tokens ≈ 6000 chars) ──────────
   if (estimateTokens(content) > 1500) {
     return {
-      model: "gemini",
-      reason: "Large content detected — Gemini handles long context best",
+      model: "nvidia",
+      reason: "Large content detected — NVIDIA handles long context well",
       confidence: "high",
     };
   }
@@ -181,9 +181,9 @@ function selectModel(
   // ── Rule 5: Code / technical content ─────────────────────────────────────
   if (detectCode(content, mode)) {
     return {
-      model: "deepseek",
+      model: "nvidia",
       reason:
-        "Code/technical content detected — DeepSeek excels at code explanation",
+        "Code/technical content detected — NVIDIA NIM excels at fast inference",
       confidence: "high",
     };
   }
@@ -199,12 +199,11 @@ function selectModel(
   }
 
   // ── Rule 7: Default ───────────────────────────────────────────────────────
-  // Gemini is the default for everything — it handles all content types well
-  // and is the only required API key. All other models are optional enhancements.
+  // NVIDIA is now the default for everything.
   return {
-    model: "gemini",
+    model: "nvidia",
     reason:
-      "Gemini is the default model — fast, capable, and handles all content types",
+      "NVIDIA is the default model — fast, capable, and handles all content types",
     confidence: "high",
   };
 }

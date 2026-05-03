@@ -5,6 +5,7 @@ const { getOpenAIResponse } = require("./models/openai.model");
 const { getGeminiResponse } = require("./models/gemini.model");
 const { getDeepSeekResponse } = require("./models/deepseek.model");
 const { getGrokResponse } = require("./models/grok.model");
+const { getNvidiaResponse } = require("./models/nvidia.model");
 
 /**
  * MODEL DISPATCH MAP
@@ -16,6 +17,7 @@ const MODEL_HANDLERS = {
   gemini: getGeminiResponse,
   deepseek: getDeepSeekResponse,
   grok: getGrokResponse,
+  nvidia: getNvidiaResponse,
 };
 
 /**
@@ -23,8 +25,8 @@ const MODEL_HANDLERS = {
  * and returns a structured result including routing metadata.
  *
  * Fallback chain:
- *  selected model → Gemini (if selected model fails and isn't already Gemini)
- *  Gemini is the universal fallback because it is the only required API key.
+ *  selected model → NVIDIA (if selected model fails and isn't already NVIDIA)
+ *  NVIDIA is the universal fallback.
  *
  * @param {string}  systemPrompt
  * @param {string}  userPrompt
@@ -56,8 +58,8 @@ async function getAIResponse(
     `[PagePal Router] → ${model.toUpperCase()} | ${reason} | confidence: ${confidence}`,
   );
 
-  // ── 2. Resolve the handler (default to Gemini if model is unknown) ────────
-  const handler = MODEL_HANDLERS[model] || getGeminiResponse;
+  // ── 2. Resolve the handler (default to NVIDIA if model is unknown) ────────
+  const handler = MODEL_HANDLERS[model] || getNvidiaResponse;
 
   try {
     // ── 3. Call the selected model ──────────────────────────────────────────
@@ -70,13 +72,13 @@ async function getAIResponse(
     return { content, tokensUsed, model, reason, confidence };
   } catch (error) {
     console.error(
-      `[PagePal Router] ${model} failed: ${error.message}. Falling back to Gemini.`,
+      `[PagePal Router] ${model} failed: ${error.message}. Falling back to NVIDIA.`,
     );
 
-    // ── 4. Fallback to Gemini if the selected model fails ──────────────────
-    // Gemini is the universal fallback — it is the only required API key.
-    if (model !== "gemini") {
-      const { content, tokensUsed } = await getGeminiResponse(
+    // ── 4. Fallback to NVIDIA if the selected model fails ──────────────────
+    // NVIDIA is the universal fallback.
+    if (model !== "nvidia") {
+      const { content, tokensUsed } = await getNvidiaResponse(
         systemPrompt,
         userPrompt,
         conversationHistory,
@@ -84,13 +86,13 @@ async function getAIResponse(
       return {
         content,
         tokensUsed,
-        model: "gemini",
+        model: "nvidia",
         reason: `Fallback from ${model} — ${error.message}`,
         confidence: "low",
       };
     }
 
-    // Re-throw if Gemini itself fails — let the global error handler deal with it
+    // Re-throw if NVIDIA itself fails — let the global error handler deal with it
     throw error;
   }
 }

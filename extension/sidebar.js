@@ -330,7 +330,7 @@ async function sendMessage(userText, actionType) {
     message: userText,
     context: contextText,
     conversationId: conversationId,
-    mode: actionType,
+    mode: actionType === "chat" ? null : actionType,
     pageUrl: pageContext ? pageContext.url : "",
     pageTitle: pageContext ? pageContext.title : "",
   };

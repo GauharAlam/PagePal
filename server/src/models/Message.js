@@ -63,8 +63,8 @@ const messageSchema = new mongoose.Schema(
     // Stored only on assistant messages; helps with analytics and debugging.
     modelUsed: {
       type: String,
-      enum: ["openai", "gemini", "deepseek", "grok"],
-      default: "openai",
+      enum: ["openai", "gemini", "deepseek", "grok", "nvidia"],
+      default: "nvidia",
     },
   },
   {
