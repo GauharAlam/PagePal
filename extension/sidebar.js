@@ -52,6 +52,13 @@ let isLoading = false;
 /** @type {HTMLElement | null} Reference to the loading bubble row for removal */
 let loadingBubbleEl = null;
 
+/** @type {string} */
+let selectedModelId = "auto";
+
+/** @type {any} Reference to SpeechRecognition instance */
+let speechRecognition = null;
+let isRecording = false;
+
 // ============================================================
 // DOM References (populated after DOMContentLoaded)
 // ============================================================
@@ -79,6 +86,59 @@ document.addEventListener("DOMContentLoaded", () => {
   themeToggle = document.getElementById("themeToggle");
   themeIcon = document.getElementById("themeIcon");
   refreshBtn = document.getElementById("refreshBtn");
+
+  // New action buttons
+  const uploadFileBtn = document.getElementById("uploadFileBtn");
+  const screenshotBtn = document.getElementById("screenshotBtn");
+  const modelSelectBtn = document.getElementById("modelSelectBtn");
+  const voiceBtn = document.getElementById("voiceBtn");
+
+  // Wire up click events
+  if (uploadFileBtn) uploadFileBtn.addEventListener("click", () => alert("Upload feature requires a Vision-enabled backend model (coming soon)."));
+  if (screenshotBtn) screenshotBtn.addEventListener("click", () => alert("Screenshot feature requires a Vision-enabled backend model (coming soon)."));
+  
+  if (modelSelectBtn) {
+    modelSelectBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const dropdown = document.getElementById("modelDropdown");
+      if (dropdown) dropdown.classList.toggle("show");
+    });
+  }
+
+  // Handle outside clicks to close dropdown
+  document.addEventListener("click", (e) => {
+    const dropdown = document.getElementById("modelDropdown");
+    if (dropdown && dropdown.classList.contains("show") && !e.target.closest('.model-select-wrapper')) {
+      dropdown.classList.remove("show");
+    }
+  });
+
+  // Handle model option selection
+  document.querySelectorAll(".model-option").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const modelId = btn.dataset.model;
+      selectedModelId = modelId;
+      
+      // Update UI active state
+      document.querySelectorAll(".model-option").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      
+      // Close dropdown
+      const dropdown = document.getElementById("modelDropdown");
+      if (dropdown) dropdown.classList.remove("show");
+      
+      // Update the main button title (for accessibility/tooltip)
+      if (modelSelectBtn) {
+        modelSelectBtn.title = `Selected Model: ${modelId}`;
+      }
+    });
+  });
+
+  // Setup Voice Input
+  setupVoiceRecognition();
+  if (voiceBtn) {
+    voiceBtn.addEventListener("click", toggleVoiceRecording);
+  }
 
   // 1. Restore theme preference
   loadTheme();
@@ -238,8 +298,12 @@ function bindEvents() {
     }
   });
 
-  // Textarea auto-resize
-  userInput.addEventListener("input", autoResizeTextarea);
+  // Textarea auto-resize and send button visibility
+  userInput.addEventListener("input", () => {
+    autoResizeTextarea();
+    // Show send button only if there is text
+    sendBtn.style.display = userInput.value.trim().length > 0 ? "flex" : "none";
+  });
 
   // Theme toggle
   themeToggle.addEventListener("click", toggleTheme);
@@ -260,8 +324,8 @@ function bindEvents() {
     refreshBtn.disabled = false;
   });
 
-  // Quick action buttons
-  document.querySelectorAll(".quick-btn").forEach((btn) => {
+  // Quick action buttons (slim)
+  document.querySelectorAll(".slim-action").forEach((btn) => {
     btn.addEventListener("click", () => {
       const action = btn.dataset.action;
       handleQuickAction(action);
@@ -331,6 +395,7 @@ async function sendMessage(userText, actionType) {
     context: contextText,
     conversationId: conversationId,
     mode: actionType === "chat" ? null : actionType,
+    modelOverride: selectedModelId === "auto" ? null : selectedModelId,
     pageUrl: pageContext ? pageContext.url : "",
     pageTitle: pageContext ? pageContext.title : "",
   };
@@ -655,6 +720,7 @@ function autoResizeTextarea() {
 function resetTextareaHeight() {
   if (!userInput) return;
   userInput.style.height = "auto";
+  if (sendBtn) sendBtn.style.display = "none";
 }
 
 // ============================================================
@@ -682,6 +748,97 @@ function sendToBackground(message) {
       reject(err);
     }
   });
+}
+
+// ============================================================
+// Voice Recognition Logic
+// ============================================================
+
+function setupVoiceRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    console.warn("Speech recognition is not supported in this browser.");
+    return;
+  }
+  
+  speechRecognition = new SpeechRecognition();
+  speechRecognition.continuous = true;
+  speechRecognition.interimResults = true;
+  speechRecognition.lang = 'en-US';
+  
+  let finalTranscript = "";
+
+  speechRecognition.onstart = () => {
+    isRecording = true;
+    finalTranscript = userInput.value;
+    if (finalTranscript && !finalTranscript.endsWith(' ')) {
+      finalTranscript += ' ';
+    }
+    const voiceBtn = document.getElementById("voiceBtn");
+    if (voiceBtn) voiceBtn.classList.add("recording");
+  };
+
+  speechRecognition.onresult = (event) => {
+    let interimTranscript = "";
+    
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript + ' ';
+      } else {
+        interimTranscript += event.results[i][0].transcript;
+      }
+    }
+    
+    // Update input box
+    if (userInput) {
+      userInput.value = finalTranscript + interimTranscript;
+      // Trigger auto-resize and show send button
+      userInput.dispatchEvent(new Event("input"));
+    }
+  };
+
+  speechRecognition.onerror = (event) => {
+    console.error("Speech recognition error", event.error);
+    stopVoiceRecording();
+  };
+
+  speechRecognition.onend = () => {
+    // If the browser stopped it automatically (due to a pause), but the user
+    // hasn't clicked stop yet, we should restart it automatically to keep listening.
+    if (isRecording) {
+      try {
+        speechRecognition.start();
+      } catch (e) {
+        console.error("Failed to restart speech recognition:", e);
+        stopVoiceRecording();
+      }
+    } else {
+      stopVoiceRecording();
+    }
+  };
+}
+
+function toggleVoiceRecording() {
+  if (!speechRecognition) {
+    addErrorBubble("🎤 Voice input is not supported in your browser.");
+    return;
+  }
+
+  if (isRecording) {
+    speechRecognition.stop();
+  } else {
+    try {
+      speechRecognition.start();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+}
+
+function stopVoiceRecording() {
+  isRecording = false;
+  const voiceBtn = document.getElementById("voiceBtn");
+  if (voiceBtn) voiceBtn.classList.remove("recording");
 }
 
 // ============================================================
