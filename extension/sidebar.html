@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PagePal AI</title>
+  <link rel="stylesheet" href="sidebar.css" />
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- ======================================================
+         HEADER
+         ====================================================== -->
+    <header class="sidebar-header">
+      <div class="logo-area">
+        <span class="logo-emoji" aria-hidden="true">🧠</span>
+        <span class="logo-text">PagePal AI</span>
+      </div>
+
+      <div class="header-actions">
+        <!-- Theme Toggle -->
+        <button
+          class="icon-btn theme-toggle"
+          id="themeToggle"
+          title="Toggle light / dark mode"
+          aria-label="Toggle theme"
+        >
+          <!-- Icon swaps via JS -->
+          <span id="themeIcon">☀️</span>
+        </button>
+
+        <!-- Refresh context -->
+        <button
+          class="icon-btn"
+          id="refreshBtn"
+          title="Refresh page context"
+          aria-label="Refresh page context"
+        >
+          🔄
+        </button>
+      </div>
+    </header>
+
+    <!-- ======================================================
+         CONTEXT BAR
+         ====================================================== -->
+    <div class="context-bar" id="contextBar" aria-live="polite">
+      <span class="context-badge" id="contextBadge">
+        🔍 Loading context…
+      </span>
+    </div>
+
+    <!-- ======================================================
+         CHAT AREA
+         ====================================================== -->
+    <main class="chat-area" id="chatContainer" role="log" aria-live="polite">
+
+      <!-- Welcome Message (shown until first message) -->
+      <div class="welcome-message" id="welcomeMessage">
+        <div class="welcome-emoji" aria-hidden="true">👋</div>
+        <h2>Hi! I'm PagePal</h2>
+        <p>
+          I can explain, summarize, or answer questions
+          about anything on this page.
+        </p>
+        <div class="feature-pills" aria-label="Supported content types">
+          <span class="feature-pill">📄 Any Page</span>
+          <span class="feature-pill">✂️ Selected Text</span>
+          <span class="feature-pill">🎬 YouTube</span>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ======================================================
+         QUICK ACTIONS
+         ====================================================== -->
+    <section class="quick-actions" aria-label="Quick action shortcuts">
+      <div class="quick-actions-label">Quick Actions</div>
+      <div class="quick-buttons" role="group" aria-label="Quick actions">
+        <button class="quick-btn" data-action="explain"   title="Explain this page">✨ Explain Page</button>
+        <button class="quick-btn" data-action="summarize" title="Summarize in bullet points">📋 Summarize</button>
+        <button class="quick-btn" data-action="keypoints" title="List key takeaways">🎯 Key Points</button>
+        <button class="quick-btn" data-action="beginner"  title="Explain for beginners">👶 Beginner Mode</button>
+        <button class="quick-btn" data-action="code"      title="Explain code on the page">💻 Explain Code</button>
+        <button class="quick-btn" data-action="selection" title="Explain your selected text">✂️ Explain Selection</button>
+      </div>
+    </section>
+
+    <!-- ======================================================
+         INPUT AREA
+         ====================================================== -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="userInput"
+          rows="1"
+          placeholder="Ask anything about this page…"
+          aria-label="Your message"
+          autocomplete="off"
+          spellcheck="true"
+        ></textarea>
+
+        <button
+          id="sendBtn"
+          title="Send message (Enter)"
+          aria-label="Send message"
+        >
+          <!-- Send arrow SVG -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ======================================================
+         FOOTER
+         ====================================================== -->
+    <footer class="footer-bar" aria-label="Extension info">
+      Powered by AI &bull; PagePal v1.0
+    </footer>
+
+  </div><!-- /#app -->
+
+  <script src="sidebar.js"></script>
+</body>
+</html>
