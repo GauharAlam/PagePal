@@ -1142,7 +1142,8 @@ async function initAuth() {
   const loginBtn = document.getElementById('loginBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const avatarContainer = document.getElementById('userAvatarContainer');
-  const dropdown = document.getElementById('avatarDropdown');
+  const profilePanel = document.getElementById('profilePanel');
+  const profilePanelClose = document.getElementById('profilePanelClose');
 
   if (loginBtn) {
     loginBtn.addEventListener('click', (e) => {
@@ -1163,19 +1164,30 @@ async function initAuth() {
     });
   }
 
-  if (avatarContainer && dropdown) {
+  // Avatar click toggles the profile panel
+  if (avatarContainer && profilePanel) {
     avatarContainer.addEventListener('click', (e) => {
-      dropdown.classList.toggle('show');
-    });
-    
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('#userAvatarContainer')) {
-        dropdown.classList.remove('show');
-      }
+      e.stopPropagation();
+      profilePanel.classList.toggle('show');
     });
   }
 
+  // Close button dismisses the profile panel
+  if (profilePanelClose && profilePanel) {
+    profilePanelClose.addEventListener('click', () => {
+      profilePanel.classList.remove('show');
+    });
+  }
+
+  // Click outside closes the profile panel
+  document.addEventListener('click', (e) => {
+    if (profilePanel && !e.target.closest('#profilePanel') && !e.target.closest('#userAvatarContainer')) {
+      profilePanel.classList.remove('show');
+    }
+  });
+
   // Listen for auth updates from the landing page (bridged via content script)
+  // This catches messages if the sidebar happens to be open when the login occurs
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'CLERK_AUTH_UPDATE') {
       if (request.user) {
@@ -1195,6 +1207,19 @@ async function initAuth() {
       if (sendResponse) sendResponse({ success: true });
     }
   });
+
+  // Listen for storage changes (e.g. background script updated auth while sidebar was closed)
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.clerkUser) {
+      if (changes.clerkUser.newValue) {
+        // User logged in
+        handleUserLoggedIn(changes.clerkUser.newValue);
+      } else {
+        // User logged out
+        handleUserLoggedOut();
+      }
+    }
+  });
 }
 
 function handleUserLoggedIn(user) {
@@ -1202,20 +1227,46 @@ function handleUserLoggedIn(user) {
   
   const loginBtn = document.getElementById("loginBtn");
   const avatarContainer = document.getElementById("userAvatarContainer");
-  const dropdownEmail = document.getElementById("dropdownEmail");
+  const profileName = document.getElementById("profileName");
+  const profileEmail = document.getElementById("profileEmail");
+  const profileAvatar = document.getElementById("profileAvatar");
   const userAvatar = document.getElementById("userAvatar");
   
   if (loginBtn) loginBtn.style.display = "none";
   if (avatarContainer) avatarContainer.style.display = "flex";
   
   const email = user.primaryEmailAddress?.emailAddress || "user";
-  if (dropdownEmail) dropdownEmail.textContent = email;
+  const firstName = user.firstName || "";
+  const lastName = user.lastName || "";
+  const displayName = (firstName + " " + lastName).trim() || email.split('@')[0];
+  const initial = displayName.charAt(0).toUpperCase();
+  const avatarColor = stringToColor(email);
+  
+  // Populate profile panel
+  if (profileEmail) profileEmail.textContent = email;
+  if (profileName) profileName.textContent = displayName;
 
+  // Set header avatar (small, in the header bar)
   if (userAvatar) {
     if (user.imageUrl) {
-      userAvatar.innerHTML = `<img src="${user.imageUrl}" alt="Avatar">`;
+      userAvatar.innerHTML = `<img src="${user.imageUrl}" alt="${displayName}">`;
     } else {
-      userAvatar.textContent = email.charAt(0).toUpperCase();
+      userAvatar.style.background = avatarColor;
+      userAvatar.style.borderColor = avatarColor;
+      userAvatar.innerHTML = '';
+      userAvatar.textContent = initial;
+    }
+  }
+
+  // Set profile panel avatar (larger)
+  if (profileAvatar) {
+    if (user.imageUrl) {
+      profileAvatar.innerHTML = `<img src="${user.imageUrl}" alt="${displayName}">`;
+    } else {
+      profileAvatar.style.background = avatarColor;
+      profileAvatar.style.borderColor = avatarColor;
+      profileAvatar.innerHTML = '';
+      profileAvatar.textContent = initial;
     }
   }
 
@@ -1223,8 +1274,7 @@ function handleUserLoggedIn(user) {
   if (welcomeMessage) {
     const title = welcomeMessage.querySelector('h2');
     if (title) {
-      const name = user.firstName || email.split('@')[0];
-      title.textContent = `Hello, ${name.toUpperCase()}`;
+      title.textContent = `Hello, ${displayName.toUpperCase()}`;
     }
   }
 
@@ -1236,11 +1286,11 @@ function handleUserLoggedOut() {
   
   const loginBtn = document.getElementById("loginBtn");
   const avatarContainer = document.getElementById("userAvatarContainer");
-  const avatarDropdown = document.getElementById("avatarDropdown");
+  const profilePanel = document.getElementById("profilePanel");
   
   if (loginBtn) loginBtn.style.display = "block";
   if (avatarContainer) avatarContainer.style.display = "none";
-  if (avatarDropdown) avatarDropdown.classList.remove("show");
+  if (profilePanel) profilePanel.classList.remove("show");
   
   // Reset welcome message
   if (welcomeMessage) {
@@ -1265,3 +1315,20 @@ function stringToColor(str) {
   }
   return colors[Math.abs(hash) % colors.length];
 }
+
+// Listen for storage changes (in case auth was updated while sidebar was already open)
+try {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes.clerkUser) {
+      if (changes.clerkUser.newValue) {
+        clerkToken = changes.clerkToken?.newValue || clerkToken;
+        handleUserLoggedIn(changes.clerkUser.newValue);
+      } else {
+        clerkToken = null;
+        handleUserLoggedOut();
+      }
+    }
+  });
+} catch (_) {}
+

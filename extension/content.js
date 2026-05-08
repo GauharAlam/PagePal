@@ -41,9 +41,27 @@ if (typeof window.__pagePalInjected === 'undefined') {
     if (event.origin !== window.location.origin) return;
 
     if (event.data && event.data.type === 'CLERK_AUTH_UPDATE') {
-      chrome.runtime.sendMessage(event.data);
+      console.log('[PagePal Content] Received CLERK_AUTH_UPDATE from landing page:', event.data.user ? 'Logged In' : 'Logged Out');
+      try {
+        chrome.runtime.sendMessage(event.data, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('[PagePal Content] Error sending to background:', chrome.runtime.lastError);
+          } else {
+            console.log('[PagePal Content] Successfully relayed to background');
+          }
+        });
+      } catch (err) {
+        console.error('[PagePal Content] Exception sending to background:', err);
+      }
     }
   });
+
+  // Request auth state immediately upon injection
+  // This solves the race condition if AuthSync mounted before we injected
+  if (window.location.hostname === 'localhost' || window.location.hostname.includes('wappify.io')) {
+    console.log('[PagePal Content] Requesting auth state from landing page...');
+    window.postMessage({ type: 'REQUEST_CLERK_AUTH' }, '*');
+  }
 }
 
 // ---------------------------------------------------------------------------

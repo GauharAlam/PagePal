@@ -104,13 +104,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         clerkToken: message.token,
       }, () => {
         console.log("[PagePal] Auth state saved to storage");
+        if (sendResponse) sendResponse({ ok: true });
       });
     } else {
       chrome.storage.local.remove(['clerkUser', 'clerkToken'], () => {
         console.log("[PagePal] Auth state cleared from storage");
+        if (sendResponse) sendResponse({ ok: true });
       });
     }
-    // Don't return true — let the message propagate to the sidebar too
+    return true; // Keep the channel open for async response
   }
 });
 
