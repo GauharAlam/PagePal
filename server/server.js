@@ -9,6 +9,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 
 const { connectDB } = require("./src/config/db");
+const { clerkAuth } = require("./src/middlewares/clerkAuth");
 const chatRoutes = require("./src/routes/chat.routes");
 const conversationRoutes = require("./src/routes/conversation.routes");
 const errorHandler = require("./src/middlewares/errorHandler");
@@ -45,6 +46,9 @@ app.use(express.json({ limit: "50kb" }));
 
 // ─── Global Rate Limiter ──────────────────────────────────────────────────────
 app.use(rateLimiter);
+
+// ─── Clerk Authentication ────────────────────────────────────────────────────
+app.use(clerkAuth);
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) => {

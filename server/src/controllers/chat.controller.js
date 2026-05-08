@@ -48,6 +48,9 @@ async function handleChat(req, res, next) {
     const cleaned = cleanContent(context);
     const cleanedContext = truncateContent(cleaned); // max 6000 chars
 
+    // ── 2.5 Extract Clerk user ID (optional, for analytics) ──────────────
+    const clerkUserId = req.auth?.sub || null; // Clerk's subject (user ID)
+
     // ── 3. Find or create Conversation ──────────────────────────────────
     let conversation;
 
@@ -55,6 +58,8 @@ async function handleChat(req, res, next) {
       conversation = await Conversation.findOne({
         conversationId: incomingConversationId,
         isActive: true,
+        // If user is authenticated, also check ownership
+        ...(clerkUserId && { clerkUserId }),
       });
     }
 
@@ -63,6 +68,7 @@ async function handleChat(req, res, next) {
       const newId = uuidv4();
       conversation = await Conversation.create({
         conversationId: newId,
+        clerkUserId, // Associate with Clerk user if authenticated
         pageUrl,
         pageTitle,
       });

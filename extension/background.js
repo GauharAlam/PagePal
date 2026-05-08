@@ -90,6 +90,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ ok: true });
     return false;
   }
+
+  if (type === "TAKE_SCREENSHOT") {
+    handleTakeScreenshot(sendResponse);
+    return true;
+  }
+
+  // Relay Clerk auth updates from content script → store in chrome.storage
+  if (type === "CLERK_AUTH_UPDATE") {
+    if (message.user) {
+      chrome.storage.local.set({
+        clerkUser: message.user,
+        clerkToken: message.token,
+      }, () => {
+        console.log("[PagePal] Auth state saved to storage");
+      });
+    } else {
+      chrome.storage.local.remove(['clerkUser', 'clerkToken'], () => {
+        console.log("[PagePal] Auth state cleared from storage");
+      });
+    }
+    // Don't return true — let the message propagate to the sidebar too
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -184,6 +206,16 @@ async function handleGetSelectedText(sendResponse) {
   } catch (err) {
     console.error("[PagePal] handleGetSelectedText error:", err);
     sendResponse({ error: err.message || "Unknown error getting selection." });
+  }
+}
+
+async function handleTakeScreenshot(sendResponse) {
+  try {
+    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "png" });
+    sendResponse({ ok: true, data: dataUrl });
+  } catch (err) {
+    console.error("[PagePal] handleTakeScreenshot error:", err);
+    sendResponse({ error: err.message || "Failed to capture screenshot." });
   }
 }
 

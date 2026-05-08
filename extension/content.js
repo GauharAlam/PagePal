@@ -34,6 +34,16 @@ if (typeof window.__pagePalInjected === 'undefined') {
       return false;
     }
   });
+
+  // Listen for Auth updates from the landing page
+  window.addEventListener('message', (event) => {
+    // Only accept messages from the same origin (the landing page)
+    if (event.origin !== window.location.origin) return;
+
+    if (event.data && event.data.type === 'CLERK_AUTH_UPDATE') {
+      chrome.runtime.sendMessage(event.data);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

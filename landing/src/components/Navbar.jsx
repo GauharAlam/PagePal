@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X, Zap } from 'lucide-react'
+import { UserButton, SignInButton, useUser, useClerk } from '@clerk/react'
 import { CHROME_STORE_URL } from '../utils/constants'
 
 const NAV_LINKS = [
@@ -12,12 +13,28 @@ const NAV_LINKS = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { isSignedIn, user } = useUser()
+  const { openSignIn } = useClerk()
+  const autoSignInTriggered = useRef(false)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  // Auto-open sign-in modal when extension sends user to /?sign_in=true
+  useEffect(() => {
+    if (autoSignInTriggered.current) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('sign_in') === 'true' && !isSignedIn) {
+      autoSignInTriggered.current = true
+      // Small delay to ensure Clerk is fully loaded
+      setTimeout(() => {
+        openSignIn({ fallbackRedirectUrl: '/' })
+      }, 500)
+    }
+  }, [isSignedIn, openSignIn])
 
   const handleNavClick = (e, href) => {
     e.preventDefault()
@@ -68,7 +85,7 @@ export default function Navbar() {
               ))}
             </nav>
 
-            {/* CTA */}
+            {/* CTA & Auth */}
             <div className="hidden md:flex items-center gap-3">
               <a
                 href={CHROME_STORE_URL}
@@ -79,6 +96,27 @@ export default function Navbar() {
                 <Zap size={14} className="fill-white" />
                 Add to Chrome
               </a>
+              {/* User Auth */}
+              {isSignedIn ? (
+                <UserButton
+                  appearance={{
+                    elements: {
+                      userButtonAvatarBox: 'w-10 h-10 rounded-full border border-white/10 hover:border-brand-500/50 transition-all',
+                      userButtonPopoverCard: 'shadow-xl shadow-black/50 border border-white/10',
+                    },
+                  }}
+                  afterSignOutUrl="/"
+                />
+              ) : (
+                <SignInButton
+                  mode="modal"
+                  fallbackRedirectUrl="/"
+                >
+                  <button className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-300 hover:text-white hover:bg-white/5 transition-all duration-200">
+                    Sign In
+                  </button>
+                </SignInButton>
+              )}
             </div>
 
             {/* Mobile toggle */}
@@ -115,6 +153,11 @@ export default function Navbar() {
                   {link.label}
                 </a>
               ))}
+              {isSignedIn && (
+                <div className="px-4 py-3 text-sm text-zinc-400">
+                  Signed in as <span className="text-white font-medium">{user?.firstName || user?.emailAddresses?.[0]?.emailAddress}</span>
+                </div>
+              )}
               <a
                 href={CHROME_STORE_URL}
                 target="_blank"
@@ -124,6 +167,13 @@ export default function Navbar() {
                 <Zap size={14} className="fill-white" />
                 Add to Chrome — Free
               </a>
+              {!isSignedIn && (
+                <SignInButton mode="modal" fallbackRedirectUrl="/">
+                  <button className="mt-2 w-full px-4 py-3 rounded-lg bg-white/5 hover:bg-white/10 text-white text-sm font-medium transition-all">
+                    Sign In
+                  </button>
+                </SignInButton>
+              )}
             </nav>
           </motion.div>
         )}

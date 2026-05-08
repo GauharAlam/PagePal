@@ -1,5 +1,6 @@
 import React from 'react'
 import Navbar from './components/Navbar'
+import AuthSync from './components/AuthSync'
 import Hero from './components/Hero'
 import Stats from './components/Stats'
 import Features from './components/Features'
@@ -11,6 +12,7 @@ import Footer from './components/Footer'
 export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 overflow-x-hidden">
+      <AuthSync />
       <Navbar />
       <main>
         <Hero />

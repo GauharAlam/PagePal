@@ -58,6 +58,11 @@ let selectedModelId = "auto";
 /** @type {any} Reference to SpeechRecognition instance */
 let speechRecognition = null;
 let isRecording = false;
+let isAgentModeActive = false;
+let isPremiumUser = false; // Mapped to logged-in state
+let currentAttachments = [];
+let clerkToken = null; // Stored JWT for API calls
+let clerk = null;
 
 // ============================================================
 // DOM References (populated after DOMContentLoaded)
@@ -90,12 +95,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // New action buttons
   const uploadFileBtn = document.getElementById("uploadFileBtn");
   const screenshotBtn = document.getElementById("screenshotBtn");
+  const fileInput = document.getElementById("fileInput");
   const modelSelectBtn = document.getElementById("modelSelectBtn");
   const voiceBtn = document.getElementById("voiceBtn");
 
   // Wire up click events
-  if (uploadFileBtn) uploadFileBtn.addEventListener("click", () => alert("Upload feature requires a Vision-enabled backend model (coming soon)."));
-  if (screenshotBtn) screenshotBtn.addEventListener("click", () => alert("Screenshot feature requires a Vision-enabled backend model (coming soon)."));
+  if (uploadFileBtn) uploadFileBtn.addEventListener("click", () => fileInput.click());
+  if (fileInput) fileInput.addEventListener("change", handleFileSelect);
+  if (screenshotBtn) screenshotBtn.addEventListener("click", takeScreenshot);
   
   if (modelSelectBtn) {
     modelSelectBtn.addEventListener("click", (e) => {
@@ -139,6 +146,12 @@ document.addEventListener("DOMContentLoaded", () => {
   if (voiceBtn) {
     voiceBtn.addEventListener("click", toggleVoiceRecording);
   }
+
+  // Setup Agent Mode
+  initAgentMode();
+
+  // Setup Authentication
+  initAuth();
 
   // 1. Restore theme preference
   loadTheme();
@@ -278,7 +291,7 @@ function bindEvents() {
   // Send button
   sendBtn.addEventListener("click", () => {
     const text = userInput.value.trim();
-    if (text) {
+    if (text || currentAttachments.length > 0) {
       userInput.value = "";
       resetTextareaHeight();
       sendMessage(text, "chat");
@@ -290,7 +303,7 @@ function bindEvents() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const text = userInput.value.trim();
-      if (text) {
+      if (text || currentAttachments.length > 0) {
         userInput.value = "";
         resetTextareaHeight();
         sendMessage(text, "chat");
@@ -301,8 +314,8 @@ function bindEvents() {
   // Textarea auto-resize and send button visibility
   userInput.addEventListener("input", () => {
     autoResizeTextarea();
-    // Show send button only if there is text
-    sendBtn.style.display = userInput.value.trim().length > 0 ? "flex" : "none";
+    // Show send button only if there is text or attachments
+    sendBtn.style.display = (userInput.value.trim().length > 0 || currentAttachments.length > 0) ? "flex" : "none";
   });
 
   // Theme toggle
@@ -398,12 +411,19 @@ async function sendMessage(userText, actionType) {
     modelOverride: selectedModelId === "auto" ? null : selectedModelId,
     pageUrl: pageContext ? pageContext.url : "",
     pageTitle: pageContext ? pageContext.title : "",
+    attachments: currentAttachments,
   };
 
   try {
     const response = await fetch(`${BACKEND_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Add Clerk token if available
+        ...(clerkToken && {
+          "Authorization": `Bearer ${clerkToken}`
+        }),
+      },
       body: JSON.stringify(payload),
     });
 
@@ -441,6 +461,7 @@ async function sendMessage(userText, actionType) {
   } finally {
     isLoading = false;
     sendBtn.disabled = false;
+    clearAttachments();
     scrollToBottom();
   }
 }
@@ -854,4 +875,393 @@ function stopVoiceRecording() {
 function truncateText(str, max) {
   if (!str) return "";
   return str.length <= max ? str : str.slice(0, max - 1) + "…";
+}
+
+// ============================================================
+// File & Screenshot Helpers
+// ============================================================
+
+async function handleFileSelect(e) {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+
+  for (const file of files) {
+    if (file.size > 5 * 1024 * 1024) {
+      alert(`File ${file.name} is too large (max 5MB).`);
+      continue;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      addAttachment({
+        name: file.name,
+        type: file.type,
+        data: event.target.result
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+  // Reset input so the same file can be picked again
+  e.target.value = "";
+}
+
+async function takeScreenshot() {
+  const screenshotBtn = document.getElementById("screenshotBtn");
+  screenshotBtn.disabled = true;
+  screenshotBtn.style.opacity = "0.5";
+
+  try {
+    const response = await sendToBackground({ type: "TAKE_SCREENSHOT" });
+    if (response && response.ok) {
+      addAttachment({
+        name: `Screenshot ${new Date().toLocaleTimeString()}.png`,
+        type: "image/png",
+        data: response.data
+      });
+    } else {
+      throw new Error(response.error || "Failed to capture screenshot");
+    }
+  } catch (err) {
+    addErrorBubble(`📸 Screenshot failed: ${err.message}`);
+  } finally {
+    screenshotBtn.disabled = false;
+    screenshotBtn.style.opacity = "";
+  }
+}
+
+function addAttachment(attachment) {
+  currentAttachments.push(attachment);
+  renderAttachments();
+}
+
+function removeAttachment(index) {
+  currentAttachments.splice(index, 1);
+  renderAttachments();
+}
+
+function clearAttachments() {
+  currentAttachments = [];
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const container = document.getElementById("attachmentPreview");
+  if (!container) return;
+
+  if (currentAttachments.length === 0) {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
+  container.style.display = "flex";
+  container.innerHTML = currentAttachments.map((att, index) => {
+    const isImage = att.type.startsWith("image/");
+    const content = isImage 
+      ? `<img src="${att.data}" alt="${att.name}">`
+      : `<div class="file-icon">📄</div>`;
+    
+    return `
+      <div class="attachment-item" title="${att.name}">
+        ${content}
+        <button class="remove-attachment" data-index="${index}">&times;</button>
+      </div>
+    `;
+  }).join("");
+
+  // Bind remove buttons
+  container.querySelectorAll(".remove-attachment").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeAttachment(parseInt(btn.dataset.index));
+    });
+  });
+  
+  // Update send button visibility (if attachments exist, show send button)
+  const sendBtn = document.getElementById("sendBtn");
+  const userInput = document.getElementById("userInput");
+  if (sendBtn && userInput) {
+    sendBtn.style.display = (userInput.value.trim().length > 0 || currentAttachments.length > 0) ? "flex" : "none";
+  }
+}
+
+// ============================================================
+// Agent Mode Logic
+// ============================================================
+
+async function initAgentMode() {
+  const agentBtn = document.getElementById('agentBtn');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const modalOverlay = document.getElementById('modalOverlay');
+  const unlockBtn = document.getElementById('unlockBtn');
+  const deactivateBtn = document.getElementById('deactivateAgent');
+
+  // Agent button click
+    agentBtn.addEventListener('click', () => {
+      console.log('[PagePal] Agent button clicked, isPremium:', isPremiumUser);
+      if (!isPremiumUser) {
+        // Fallback: Open landing page if clerk is not available or hasn't openSignIn
+        if (clerk && typeof clerk.openSignIn === 'function') {
+          console.log('[PagePal] Opening Clerk sign-in modal');
+          clerk.openSignIn();
+        } else {
+          console.log('[PagePal] Fallback: Opening landing page tab');
+          chrome.tabs.create({ url: 'http://localhost:5173' });
+        }
+      } else {
+        toggleAgentMode();
+      }
+    });
+
+  // Modal close
+  closeModalBtn.addEventListener('click', closeUpgradeModal);
+  modalOverlay.addEventListener('click', closeUpgradeModal);
+
+  // Unlock logic is now handled by Clerk Auth, 
+  // but we keep the button for testing/legacy
+  unlockBtn.addEventListener('click', async () => {
+    alert('Authentication is now handled via the Login button in the header.');
+  });
+
+  // Also support Enter key in license input
+  const licenseInput = document.getElementById('licenseInput');
+  if(licenseInput) {
+    licenseInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        unlockBtn.click();
+      }
+    });
+  }
+
+  // Deactivate logic
+  deactivateBtn.addEventListener('click', () => {
+    if (isAgentModeActive) toggleAgentMode();
+  });
+}
+
+function updateAgentButtonUI() {
+  const btn = document.getElementById('agentBtn');
+  const lock = btn.querySelector('.lock-badge');
+  
+  if (isPremiumUser) {
+    btn.classList.add('premium');
+    btn.title = "Agent Mode — Active";
+    if (lock) lock.style.display = 'none';
+  } else {
+    btn.classList.remove('premium');
+    btn.title = "Agent Mode — Premium Feature";
+    if (lock) lock.style.display = 'flex';
+  }
+}
+
+function openUpgradeModal() {
+  document.getElementById('upgradeModal').classList.add('show');
+  document.getElementById('modalOverlay').classList.add('show');
+}
+
+function closeUpgradeModal() {
+  document.getElementById('upgradeModal').classList.remove('show');
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+function toggleAgentMode() {
+  isAgentModeActive = !isAgentModeActive;
+  const card = document.querySelector('.floating-input-card');
+  const pill = document.getElementById('agentModePill');
+  const quickActions = document.getElementById('quickActions');
+  const voiceBtn = document.getElementById('voiceBtn');
+  const userInput = document.getElementById('userInput');
+
+  if (isAgentModeActive) {
+    card.classList.add('agent-active');
+    pill.style.display = 'flex';
+    voiceBtn.classList.add('go-btn');
+    userInput.placeholder = "What should I do for you?";
+    
+    // Update quick chips
+    quickActions.innerHTML = `
+      <span class="slim-action" data-action="agent-open">Open App</span>
+      <span class="slim-action" data-action="agent-browse">Browse Web</span>
+      <span class="slim-action" data-action="agent-task">Do Task</span>
+    `;
+  } else {
+    card.classList.remove('agent-active');
+    pill.style.display = 'none';
+    voiceBtn.classList.remove('go-btn');
+    userInput.placeholder = "Ask anything...";
+    
+    // Restore quick chips
+    quickActions.innerHTML = `
+      <span class="slim-action" data-action="summarize">Summarize</span>
+      <span class="slim-action" data-action="keypoints">Key Points</span>
+      <span class="slim-action" data-action="selection">Selection</span>
+    `;
+  }
+  
+  // Re-bind quick action events since we replaced innerHTML
+  document.querySelectorAll(".slim-action").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.action;
+      if (action.startsWith('agent-')) {
+        handleAgentQuickAction(action);
+      } else {
+        handleQuickAction(action);
+      }
+    });
+  });
+}
+
+function handleAgentQuickAction(action) {
+  const userInput = document.getElementById('userInput');
+  if (action === 'agent-open') userInput.value = "Open WhatsApp and send a message...";
+  if (action === 'agent-browse') userInput.value = "Search for the latest news about AI on Google...";
+  if (action === 'agent-task') userInput.value = "Organize my desktop and move screenshots to a folder...";
+  
+  userInput.dispatchEvent(new Event("input"));
+}
+
+// ============================================================
+// Authentication Logic (Clerk)
+// ============================================================
+
+async function initAuth() {
+  // Extension cannot directly use Clerk in its isolated context.
+  // Instead, we check for stored auth data and listen for messages from the landing page.
+  
+  // Load stored user data
+  chrome.storage.local.get(['clerkUser', 'clerkToken'], (data) => {
+    if (data.clerkUser) {
+      clerkToken = data.clerkToken || null;
+      handleUserLoggedIn(data.clerkUser);
+    } else {
+      handleUserLoggedOut();
+    }
+  });
+
+  // Setup UI handlers
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const avatarContainer = document.getElementById('userAvatarContainer');
+  const dropdown = document.getElementById('avatarDropdown');
+
+  if (loginBtn) {
+    loginBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('[PagePal] Login button clicked, opening sign-in tab...');
+      // Open landing page with ?sign_in=true so Clerk modal auto-opens
+      chrome.tabs.create({ url: 'http://localhost:5173/?sign_in=true' });
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.storage.local.remove(['clerkUser', 'clerkToken'], () => {
+        clerkToken = null;
+        handleUserLoggedOut();
+      });
+    });
+  }
+
+  if (avatarContainer && dropdown) {
+    avatarContainer.addEventListener('click', (e) => {
+      dropdown.classList.toggle('show');
+    });
+    
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#userAvatarContainer')) {
+        dropdown.classList.remove('show');
+      }
+    });
+  }
+
+  // Listen for auth updates from the landing page (bridged via content script)
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === 'CLERK_AUTH_UPDATE') {
+      if (request.user) {
+        chrome.storage.local.set({
+          clerkUser: request.user,
+          clerkToken: request.token,
+        }, () => {
+          clerkToken = request.token;
+          handleUserLoggedIn(request.user);
+        });
+      } else {
+        chrome.storage.local.remove(['clerkUser', 'clerkToken'], () => {
+          clerkToken = null;
+          handleUserLoggedOut();
+        });
+      }
+      if (sendResponse) sendResponse({ success: true });
+    }
+  });
+}
+
+function handleUserLoggedIn(user) {
+  isPremiumUser = true;
+  
+  const loginBtn = document.getElementById("loginBtn");
+  const avatarContainer = document.getElementById("userAvatarContainer");
+  const dropdownEmail = document.getElementById("dropdownEmail");
+  const userAvatar = document.getElementById("userAvatar");
+  
+  if (loginBtn) loginBtn.style.display = "none";
+  if (avatarContainer) avatarContainer.style.display = "flex";
+  
+  const email = user.primaryEmailAddress?.emailAddress || "user";
+  if (dropdownEmail) dropdownEmail.textContent = email;
+
+  if (userAvatar) {
+    if (user.imageUrl) {
+      userAvatar.innerHTML = `<img src="${user.imageUrl}" alt="Avatar">`;
+    } else {
+      userAvatar.textContent = email.charAt(0).toUpperCase();
+    }
+  }
+
+  // Update dynamic welcome message
+  if (welcomeMessage) {
+    const title = welcomeMessage.querySelector('h2');
+    if (title) {
+      const name = user.firstName || email.split('@')[0];
+      title.textContent = `Hello, ${name.toUpperCase()}`;
+    }
+  }
+
+  updateAgentButtonUI();
+}
+
+function handleUserLoggedOut() {
+  isPremiumUser = false;
+  
+  const loginBtn = document.getElementById("loginBtn");
+  const avatarContainer = document.getElementById("userAvatarContainer");
+  const avatarDropdown = document.getElementById("avatarDropdown");
+  
+  if (loginBtn) loginBtn.style.display = "block";
+  if (avatarContainer) avatarContainer.style.display = "none";
+  if (avatarDropdown) avatarDropdown.classList.remove("show");
+  
+  // Reset welcome message
+  if (welcomeMessage) {
+    const title = welcomeMessage.querySelector('h2');
+    if (title) title.textContent = "Hello there";
+  }
+
+  if (isAgentModeActive) {
+    toggleAgentMode(); // Deactivate agent mode
+  }
+  updateAgentButtonUI();
+}
+
+/**
+ * Convert a string to a consistent color (for avatars).
+ */
+function stringToColor(str) {
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F'];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
 }

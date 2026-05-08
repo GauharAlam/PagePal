@@ -11,8 +11,8 @@ const conversationSchema = new mongoose.Schema(
       unique: true,
     },
 
-    // The user this conversation belongs to
-    userId: {
+    // Clerk user ID (authenticated users only)
+    clerkUserId: {
       type: String,
       trim: true,
     },
@@ -61,6 +61,6 @@ const conversationSchema = new mongoose.Schema(
 // No need to add it again with .index() — that caused the Mongoose duplicate warning.
 
 // Support listing conversations by user, sorted by recency
-conversationSchema.index({ userId: 1, updatedAt: -1 });
+conversationSchema.index({ clerkUserId: 1, updatedAt: -1 });
 
 module.exports = mongoose.model("Conversation", conversationSchema);
