@@ -33,6 +33,13 @@ if (typeof window.__pagePalInjected === 'undefined') {
       }
       return false;
     }
+
+    if (type === 'FORCE_AUTH_SYNC') {
+      console.log('[PagePal Content] Received FORCE_AUTH_SYNC from extension, pinging landing page...');
+      window.postMessage({ type: 'REQUEST_CLERK_AUTH' }, '*');
+      sendResponse({ ok: true });
+      return false;
+    }
   });
 
   // Listen for Auth updates from the landing page

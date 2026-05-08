@@ -1186,6 +1186,17 @@ async function initAuth() {
     }
   });
 
+  // Proactively force any open landing page tabs to re-sync their auth state
+  // This handles the case where the user logged in but the extension missed the initial broadcast
+  chrome.tabs.query({ url: "*://localhost/*" }, (tabs) => {
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, { type: "FORCE_AUTH_SYNC" }, () => {
+        // Ignore errors for tabs where content script isn't loaded
+        if (chrome.runtime.lastError) {} 
+      });
+    });
+  });
+
   // Listen for auth updates from the landing page (bridged via content script)
   // This catches messages if the sidebar happens to be open when the login occurs
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

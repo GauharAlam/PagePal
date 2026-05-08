@@ -20,7 +20,13 @@ const AuthSync = () => {
     const syncAuth = async () => {
       try {
         if (isSignedIn && user) {
-          const token = await getToken();
+          let token = null;
+          try {
+            token = await getToken();
+          } catch (tokenErr) {
+            console.warn('[PagePal] Could not fetch token, syncing user anyway:', tokenErr);
+          }
+
           // Send to extension via window.postMessage
           // The content script will pick this up and forward it to the background/sidebar
           window.postMessage({
