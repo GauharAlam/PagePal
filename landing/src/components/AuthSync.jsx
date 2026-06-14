@@ -49,7 +49,10 @@ const AuthSync = () => {
             hasAutoClosedRef.current = true;
             // Small delay to ensure the content script has time to relay the message
             setTimeout(() => {
-              // Clean up the URL parameter and show a success message
+              // Show a success message in the DOM to indicate the tab is closing
+              document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-family:sans-serif;font-size:24px;">Successfully logged in! You can close this tab.</div>';
+              window.close();
+              // Fallback if window.close() is blocked
               window.history.replaceState({}, '', '/');
             }, 1000);
           }

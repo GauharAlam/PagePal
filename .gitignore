@@ -21,8 +21,15 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
-# Extension specific
-extension/icons/*.png
-!extension/icons/icon128.png
-!extension/icons/icon48.png
-!extension/icons/icon16.png
+# Extension build output
+extension/dist/
+
+# Proxy server
+proxy-server/node_modules/
+
+# Landing page
+landing/node_modules/
+landing/dist/
+
+# Generated files
+generate_icons.sh
