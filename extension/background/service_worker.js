@@ -33,6 +33,33 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   } catch {}
 });
 
+// Configure Chrome side panel to open on action click
+if (chrome.sidePanel?.setPanelBehavior) {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((err) => console.error('Error setting sidePanel behavior:', err));
+}
+
+// Handle messages from content scripts (e.g. floating button click)
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'openSidePanel') {
+    if (sender.tab?.id) {
+      chrome.sidePanel.open({ tabId: sender.tab.id })
+        .then(() => sendResponse({ success: true }))
+        .catch((err) => {
+          if (sender.tab?.windowId) {
+            chrome.sidePanel.open({ windowId: sender.tab.windowId })
+              .then(() => sendResponse({ success: true }))
+              .catch((wErr) => sendResponse({ success: false, error: wErr.message }));
+          } else {
+            sendResponse({ success: false, error: err.message });
+          }
+        });
+      return true;
+    }
+  }
+});
+
 // Context menu for "Explain Selection" — idempotent
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
@@ -52,5 +79,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       tabUrl: tab.url,
       tabTitle: tab.title,
     });
+    if (tab?.id) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
   }
 });

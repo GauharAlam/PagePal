@@ -119,4 +119,92 @@
       .replace(/\n\s*\n/g, '\n\n')
       .trim();
   }
+
+  // Inject Left-Side Floating Trigger
+  function injectFloatingTrigger() {
+    if (window !== window.top) return; // Only inject in main frame
+    if (document.getElementById('pagepal-sidebar-trigger-host')) return; // Avoid duplicates
+
+    const host = document.createElement('div');
+    host.id = 'pagepal-sidebar-trigger-host';
+    host.style.position = 'fixed';
+    host.style.left = '0';
+    host.style.top = '48%';
+    host.style.zIndex = '2147483647';
+    host.style.pointerEvents = 'none';
+
+    const shadow = host.attachShadow({ mode: 'open' });
+    shadow.innerHTML = `
+      <style>
+        .pagepal-trigger {
+          pointer-events: auto;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          background: #fde047;
+          color: #09090b;
+          border: 1.5px solid #18181b;
+          border-left: none;
+          border-radius: 0 12px 12px 0;
+          padding: 8px 12px 8px 8px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          transform: translateX(-4px);
+          user-select: none;
+        }
+        .pagepal-trigger:hover {
+          transform: translateX(0);
+          background: #facc15;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+          padding-right: 14px;
+        }
+        .pagepal-trigger:active {
+          transform: scale(0.96) translateX(0);
+        }
+        .pagepal-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 22px;
+          background: #18181b;
+          color: #fde047;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+        }
+        .pagepal-label {
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+        }
+      </style>
+      <button class="pagepal-trigger" id="open-btn" title="Open PagePal AI Side Panel">
+        <span class="pagepal-icon">◈</span>
+        <span class="pagepal-label">PagePal</span>
+      </button>
+    `;
+
+    shadow.getElementById('open-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      try {
+        chrome.runtime.sendMessage({ action: 'openSidePanel' });
+      } catch (err) {
+        console.error('PagePal trigger click error:', err);
+      }
+    });
+
+    document.documentElement.appendChild(host);
+  }
+
+  // Inject when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectFloatingTrigger);
+  } else {
+    injectFloatingTrigger();
+  }
 })();

@@ -3,11 +3,14 @@
   "name": "PagePal AI",
   "version": "1.0.0",
   "description": "AI co-pilot for any webpage — summarize, chat, translate, and more.",
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus", "identity"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus", "identity", "sidePanel"],
   "host_permissions": ["https://*.youtube.com/*", "https://*/*", "http://*/*"],
   "background": {
     "service_worker": "background/service_worker.js",
     "type": "module"
+  },
+  "side_panel": {
+    "default_path": "popup/index.html"
   },
   "content_scripts": [
     {
@@ -17,7 +20,7 @@
     }
   ],
   "action": {
-    "default_popup": "popup/index.html",
+    "default_title": "Open PagePal AI Side Panel",
     "default_icon": {
       "16": "assets/icons/16.png",
       "48": "assets/icons/48.png",

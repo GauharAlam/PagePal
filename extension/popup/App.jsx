@@ -200,8 +200,8 @@ export default function App() {
   }
 
   return (
-    <div className={`${theme === 'dark' ? 'dark' : ''} flex h-[600px] w-[380px] flex-col overflow-hidden bg-background`}>
-      <div className="flex h-full w-full flex-col border border-border bg-background text-foreground overflow-hidden">
+    <div className={`${theme === 'dark' ? 'dark' : ''} flex h-screen w-full flex-col overflow-hidden bg-background`}>
+      <div className="flex h-full w-full flex-col bg-background text-foreground overflow-hidden">
         <Header
           user={user}
           userPlan={userPlan}
