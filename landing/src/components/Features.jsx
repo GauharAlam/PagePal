@@ -2,7 +2,7 @@ import React from 'react';
 import { Zap, Shield, Code2, Keyboard } from 'lucide-react';
 
 const FEATURES = [
-  { icon: Zap, title: 'Muse-Spark 1.2 in-browser', desc: 'Fast AI without leaving the page. Summarize, explain, and chat streamed in your popup.' },
+  { icon: Zap, title: 'Instant AI in-browser', desc: 'Fast AI without leaving the page. Summarize, explain, and chat directly in your sidebar.' },
   { icon: Shield, title: 'Lightweight & private', desc: 'Minimal permissions. No tab injection. Content sent only when you prompt.' },
   { icon: Code2, title: 'Fully open-source', desc: 'MIT. Inspect, fork, contribute. Reproducible builds, no trackers.' },
   { icon: Keyboard, title: 'Instant shortcut', desc: 'Pin once, press Ctrl+Shift+P, run any prompt anywhere.' },

@@ -3,7 +3,7 @@ import React from 'react';
 const STEPS = [
   { n: '01', title: 'Install from Store', desc: 'Add PagePal in one click. No account.' },
   { n: '02', title: 'Pin & press shortcut', desc: 'Pin and press Ctrl+Shift+P on any page.' },
-  { n: '03', title: 'Run Muse-Spark 1.2', desc: 'Summarize, chat, prompt without leaving the tab.' },
+  { n: '03', title: 'Run AI co-pilot', desc: 'Summarize, chat, prompt without leaving the tab.' },
 ];
 
 export default function HowItWorks() {
