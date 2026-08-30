@@ -52,8 +52,9 @@ const aiLimiter = rateLimit({
     if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.slice(7, 30);
     }
-    return req.ip;
+    return req.ip || '127.0.0.1';
   },
+  validate: { keyGeneratorIpFallback: false },
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'AI request rate limit exceeded. Please wait a moment before trying again.' },
