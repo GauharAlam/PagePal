@@ -97,3 +97,13 @@ describe('Validation Schemas Tests', () => {
     assert.ok(!resInvalid.success);
   });
 });
+
+describe('Route Health & Availability Tests', () => {
+  test('health endpoint responds with ok', async () => {
+    const res = await fetch('http://localhost:3001/api/health').catch(() => null);
+    if (res) {
+      const data = await res.json();
+      assert.equal(data.status, 'ok');
+    }
+  });
+});

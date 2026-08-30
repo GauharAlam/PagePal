@@ -43,14 +43,14 @@ const ipLimiter = rateLimit({
 });
 app.use('/api/', ipLimiter);
 
-// Per-User / Per-Token rate limiter (30 req/min on AI endpoints)
+// Per-User / Per-Token rate limiter on AI generation endpoints
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   keyGenerator: (req) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      return authHeader.slice(7, 30); // Use token prefix as key
+      return authHeader.slice(7, 30);
     }
     return req.ip;
   },
@@ -84,11 +84,13 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Apply AI rate limiter to generation routes
-app.use('/api/summarize', aiLimiter, summarizeRouter);
-app.use('/api/chat', aiLimiter, askRouter);
-app.use('/api/quiz', aiLimiter, askRouter);
-app.use('/api/translate', aiLimiter, translateRouter);
+// Apply AI rate limiter to AI generation endpoints
+app.use(['/api/summarize', '/api/chat', '/api/quiz', '/api/translate'], aiLimiter);
+
+// Mount routers
+app.use(summarizeRouter);
+app.use(askRouter);
+app.use(translateRouter);
 app.use(billingRouter);
 app.use(byokRouter);
 

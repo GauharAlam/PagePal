@@ -6,6 +6,7 @@ import { validate, chatSchema, quizSchema } from '../lib/validate.js';
 import { env } from '../lib/env.js';
 import { mockChat, mockQuiz } from '../lib/demo.js';
 import { sanitizeContent, sanitizeTitle } from '../lib/sanitize.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 const FREE_CHAT_LIMIT = 10;
@@ -16,14 +17,14 @@ router.post('/api/chat', requireAuth, validate(chatSchema), async (req, res) => 
     const { messages: rawMessages, context: rawContext, pageType, title: rawTitle } = req.body;
     const title = sanitizeTitle(rawTitle);
     const context = sanitizeContent(rawContext);
-    const messages = rawMessages.map(m => ({
+    const messages = rawMessages.map((m) => ({
       role: m.role,
-      content: sanitizeContent(m.content)
+      content: sanitizeContent(m.content),
     }));
 
     const useOpenRouter = hasOpenRouter();
     if (!useOpenRouter && env.DEMO_MODE) {
-      console.log('📦 DEMO_MODE chat → mock');
+      logger.info('DEMO_MODE chat → mock reply');
       return res.json({ reply: mockChat({ messages, title }) });
     }
 
@@ -37,23 +38,24 @@ router.post('/api/chat', requireAuth, validate(chatSchema), async (req, res) => 
       });
     }
 
-    const system = `You are PagePal AI, an intelligent assistant helping users understand content they are viewing.
-Page type: ${pageType}
-Page title: "${title}"
-Page content (for reference):
-${context?.slice(0, 12000) || 'No content provided'}
+    const system = `You are PagePal AI, an intelligent sidebar assistant helping users understand and explore the webpage they are viewing.
+Current Page Type: ${pageType || 'general'}
+Current Page Title: "${title || 'Untitled'}"
 
-Rules:
-- Answer ONLY based on the page content above when the question is about it
-- Be concise and helpful
-- If asked about timestamps, reference the format [MM:SS]
-- If the user asks something unrelated to the page, you can still answer helpfully
-- Never make up information that isn't in the content
-- Use markdown formatting when appropriate for readability`;
+Page Content (extracted from current browser tab):
+"""
+${context?.slice(0, 14000) || 'No specific page text extracted.'}
+"""
+
+Instructions:
+1. When the user asks about the page or its author/content, extract the exact answer from the Page Content above.
+2. For greetings or general questions, respond cordially and concisely.
+3. If specific details requested are not found in the extracted text, clearly state what is available on the page and answer as helpfully as possible.
+4. Use clean markdown formatting (bullet points, bold text, code blocks) when appropriate.`;
 
     let replyText = '';
     if (useOpenRouter) {
-      console.log(`🤖 OpenRouter GLM chat → ${env.OPENROUTER_MODEL}`);
+      logger.info(`OpenRouter GLM chat → ${env.OPENROUTER_MODEL}`);
       const msg = await openRouterCreate({ system, messages: messages.slice(-10), max_tokens: 1000 });
       replyText = msg.content[0].text;
     } else {
@@ -78,7 +80,7 @@ Rules:
 
     res.json({ reply: replyText });
   } catch (err) {
-    console.error('Chat error:', err);
+    logger.error('Chat error', { error: err.message });
     const isProd = process.env.NODE_ENV === 'production';
     res.status(500).json({ error: isProd ? 'Chat failed' : err.message });
   }
@@ -93,7 +95,7 @@ router.post('/api/quiz', requireAuth, validate(quizSchema), async (req, res) => 
 
     const useOpenRouter = hasOpenRouter();
     if (!useOpenRouter && env.DEMO_MODE) {
-      console.log('📦 DEMO_MODE quiz → mock');
+      logger.info('DEMO_MODE quiz → mock');
       return res.json(mockQuiz());
     }
 
@@ -107,7 +109,6 @@ router.post('/api/quiz', requireAuth, validate(quizSchema), async (req, res) => 
       });
     }
 
-    // Allow demo free to try quiz with OpenRouter
     const prompt = `Generate 5 multiple choice questions based on this content titled "${title}".
 Each question should test understanding of key concepts.
 Respond ONLY with valid JSON in this exact format:
@@ -117,7 +118,7 @@ Content: ${content.slice(0, 8000)}`;
 
     let raw = '';
     if (useOpenRouter) {
-      console.log(`🤖 OpenRouter GLM quiz → ${env.OPENROUTER_MODEL}`);
+      logger.info(`OpenRouter GLM quiz → ${env.OPENROUTER_MODEL}`);
       const msg = await openRouterCreate({ messages: [{ role: 'user', content: prompt }], max_tokens: 1500 });
       raw = msg.content[0].text;
     } else {
@@ -140,7 +141,7 @@ Content: ${content.slice(0, 8000)}`;
       return res.status(502).json({ error: 'Quiz generation returned invalid format' });
     }
   } catch (err) {
-    console.error('Quiz error:', err);
+    logger.error('Quiz error', { error: err.message });
     const isProd = process.env.NODE_ENV === 'production';
     res.status(500).json({ error: isProd ? 'Quiz generation failed' : err.message });
   }

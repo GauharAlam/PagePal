@@ -1,15 +1,15 @@
 const TABS = [
   { id: 'summary', label: 'Summary', icon: '◧' },
-  { id: 'chat', label: 'Chat', icon: '◨' },
-  { id: 'timeline', label: 'Timeline', icon: '◫' },
-  { id: 'tools', label: 'Tools', icon: '⬔' },
-  { id: 'keys', label: 'Keys', icon: '⚿' },
+  { id: 'chat', label: 'Chat', icon: '💬' },
+  { id: 'timeline', label: 'Chapters', icon: '⏱' },
+  { id: 'tools', label: 'Tools', icon: '🛠' },
+  { id: 'keys', label: 'API Keys', icon: '🔑' },
 ];
 
 export default function TabBar({ activeTab, onChange }) {
   return (
-    <div className="border-b border-border/50 bg-background px-3 py-2.5">
-      <div role="tablist" aria-label="Sections" className="flex gap-1.5 overflow-x-auto scrollbar-none">
+    <div className="border-b border-border/40 bg-muted/20 px-2 py-1.5">
+      <div role="tablist" aria-label="Sections" className="flex items-center gap-1 rounded-xl bg-muted/50 p-1">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -20,14 +20,14 @@ export default function TabBar({ activeTab, onChange }) {
               aria-controls={`panel-${tab.id}`}
               id={`tab-${tab.id}`}
               onClick={() => onChange(tab.id)}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+              className={`flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition-all ${
                 isActive
-                  ? 'border-foreground bg-foreground text-background shadow-hard-sm'
-                  : 'border-border bg-card text-muted-foreground hover:border-foreground/20 hover:bg-accent hover:text-foreground'
+                  ? 'bg-card text-foreground shadow-sm border border-border/40'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-card/40'
               }`}
             >
-              <span aria-hidden className="text-[10px] opacity-70">{tab.icon}</span>
-              {tab.label}
+              <span className="text-[10px]">{tab.icon}</span>
+              <span>{tab.label}</span>
             </button>
           );
         })}

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
-import ContextBar from './components/ContextBar';
 import TabBar from './components/TabBar';
 import SummaryTab from './components/SummaryTab';
 import ChatTab from './components/ChatTab';
@@ -8,7 +7,6 @@ import TimelineTab from './components/TimelineTab';
 import ToolsTab from './components/ToolsTab';
 import ApiKeysTab from './components/ApiKeysTab';
 import LoginModal from './components/LoginModal';
-import Footer from './components/Footer';
 import { supabase, isDemoMode, demoUser, demoSession } from './lib/supabase';
 
 export default function App() {
@@ -21,18 +19,74 @@ export default function App() {
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentModel, setCurrentModel] = useState(() => {
+    try { return localStorage.getItem('pagepal-model') || 'claude-sonnet-4-6'; } catch { return 'claude-sonnet-4-6'; }
+  });
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('pagepal-theme') || 'light'; } catch { return 'light'; }
+    try { return localStorage.getItem('pagepal-theme') || 'dark'; } catch { return 'dark'; }
   });
   const lastSummarizedUrlRef = useRef('');
   const autoSummarizeRef = useRef(null);
 
-  // Persist theme to storage
+  // Persist theme and model to storage
   useEffect(() => {
     try { localStorage.setItem('pagepal-theme', theme); } catch {}
   }, [theme]);
 
-  // Init auth & page context
+  useEffect(() => {
+    try { localStorage.setItem('pagepal-model', currentModel); } catch {}
+  }, [currentModel]);
+
+  // Extract page content safely
+  const extractPageContent = useCallback(async () => {
+    if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
+      return { type: 'article', title: document.title, content: 'Sample development content' };
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return { type: 'article', title: 'Current Page', content: '' };
+
+    try {
+      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' });
+      if (resp?.content) return resp;
+    } catch {}
+
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          const url = window.location.href;
+          const title = document.title;
+          if (url.includes('youtube.com/watch')) {
+            const videoId = new URLSearchParams(window.location.search).get('v');
+            const desc = document.querySelector('#description-inline-expander, #description');
+            return {
+              type: 'youtube',
+              videoId,
+              title: title.replace(' - YouTube', '').trim(),
+              content: desc?.innerText?.trim()?.slice(0, 10000) || `YouTube video: ${title}`,
+            };
+          }
+          const selectors = ['article', 'main', '[role="main"]', '#js-pjax-container', '.post-content', '.article-content', '.entry-content', '.content', '#content', 'body'];
+          let content = '';
+          for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && el.innerText && el.innerText.length > 100) {
+              content = el.innerText.slice(0, 15000);
+              break;
+            }
+          }
+          if (!content) content = (document.body?.innerText || '').slice(0, 15000);
+          return { type: 'article', title, content };
+        },
+      });
+      return results?.[0]?.result || { type: 'article', title: tab.title || 'Current Page', content: '' };
+    } catch (err) {
+      console.warn('Script execution failed:', err);
+      return { type: 'article', title: tab.title || 'Current Page', content: '' };
+    }
+  }, []);
+
+  // Init auth & load context with background content extraction
   useEffect(() => {
     let sub;
     if (isDemoMode) {
@@ -53,19 +107,21 @@ export default function App() {
 
     const loadContext = async () => {
       try {
-        const tryGet = async (area) => {
-          if (!chrome?.storage?.[area]) return null;
-          return await chrome.storage[area].get(['pageType', 'tabUrl', 'tabTitle']);
-        };
-        let result = await tryGet('session');
-        if (!result?.tabUrl) result = await tryGet('local');
-        if (result?.tabUrl) {
-          setPageContext({ pageType: result.pageType || 'general', url: result.tabUrl || '', title: result.tabTitle || 'Current Page' });
-          return;
-        }
         if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
           const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tab?.url) setPageContext({ pageType: detectType(tab.url), url: tab.url, title: tab.title || 'Current Page' });
+          if (tab?.url) {
+            const pType = detectType(tab.url);
+            setPageContext({ pageType: pType, url: tab.url, title: tab.title || 'Current Page' });
+
+            extractPageContent().then((data) => {
+              if (data?.content) {
+                setPageContent(data.content);
+                if (data.type) {
+                  setPageContext(prev => ({ ...prev, pageType: data.type, title: data.title || prev.title }));
+                }
+              }
+            }).catch(() => {});
+          }
         }
       } catch (err) {
         console.warn('Context load error:', err);
@@ -73,7 +129,7 @@ export default function App() {
     };
     loadContext();
     return () => sub?.unsubscribe();
-  }, []);
+  }, [extractPageContent]);
 
   function detectType(url) {
     if (!url) return 'general';
@@ -99,42 +155,6 @@ export default function App() {
     } catch (err) {
       console.warn('Plan fetch failed:', err);
     }
-  }
-
-  // Extract page content safely
-  async function extractPageContent() {
-    if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
-      return { type: 'article', title: document.title, content: 'Sample development content' };
-    }
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) throw new Error('No active tab');
-
-    try {
-      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' });
-      if (resp?.content) return resp;
-    } catch {}
-
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        const url = window.location.href;
-        const title = document.title;
-        if (url.includes('youtube.com/watch')) {
-          const videoId = new URLSearchParams(window.location.search).get('v');
-          const desc = document.querySelector('#description-inline-expander, #description');
-          return { type: 'youtube', videoId, title: title.replace(' - YouTube', '').trim(), content: desc?.innerText?.trim()?.slice(0, 10000) || `YouTube video: ${title}` };
-        }
-        const selectors = ['article', 'main', '[role="main"]', '.post-content', '.article-content', '.entry-content', '.content', '#content', 'body'];
-        let content = '';
-        for (const sel of selectors) {
-          const el = document.querySelector(sel);
-          if (el && el.innerText.length > 200) { content = el.innerText.slice(0, 15000); break; }
-        }
-        if (!content) content = (document.body.innerText || '').slice(0, 15000);
-        return { type: 'article', title, content };
-      },
-    });
-    return results[0]?.result;
   }
 
   const summarizePage = useCallback(async (force = false) => {
@@ -185,6 +205,7 @@ export default function App() {
           pageType: pageData.type,
           title: pageData.title,
           url,
+          model: currentModel,
           forceRefresh: force,
         }),
         signal: controller.signal,
@@ -198,7 +219,6 @@ export default function App() {
       setSummaryData(data);
       lastSummarizedUrlRef.current = url;
 
-      // Cache locally
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         try {
           chrome.storage.local.set({ [`summary_${url}`]: { data, timestamp: Date.now() } });
@@ -214,7 +234,7 @@ export default function App() {
       setLoading(false);
       autoSummarizeRef.current = null;
     }
-  }, [pageContext.url, user, summaryData]);
+  }, [pageContext.url, user, summaryData, extractPageContent, currentModel]);
 
   // Tab change listener with memory cleanup
   useEffect(() => {
@@ -224,51 +244,53 @@ export default function App() {
       try {
         const tab = await chrome.tabs.get(activeInfo.tabId);
         if (tab?.url && tab.url !== pageContext.url) {
-          setPageContext({ pageType: detectType(tab.url), url: tab.url, title: tab.title || 'Current Page' });
+          const newType = detectType(tab.url);
+          setPageContext({ pageType: newType, url: tab.url, title: tab.title || 'Current Page' });
           setSummaryData(null);
           setPageContent('');
           setError(null);
+          extractPageContent().then((data) => {
+            if (data?.content) setPageContent(data.content);
+          }).catch(() => {});
         }
       } catch {}
     };
 
     const handleUpdated = (tabId, changeInfo, tab) => {
       if (changeInfo.status === 'complete' && tab?.url && tab.url !== pageContext.url) {
-        setPageContext({ pageType: detectType(tab.url), url: tab.url, title: tab.title || 'Current Page' });
+        const newType = detectType(tab.url);
+        setPageContext({ pageType: newType, url: tab.url, title: tab.title || 'Current Page' });
         setSummaryData(null);
         setPageContent('');
         setError(null);
+        extractPageContent().then((data) => {
+          if (data?.content) setPageContent(data.content);
+        }).catch(() => {});
       }
     };
 
     chrome.tabs.onActivated?.addListener(handleActivated);
     chrome.tabs.onUpdated?.addListener(handleUpdated);
 
-    // Return cleanup to prevent memory leak!
     return () => {
       chrome.tabs.onActivated?.removeListener(handleActivated);
       chrome.tabs.onUpdated?.removeListener(handleUpdated);
     };
-  }, [pageContext.url]);
-
-  function handleQuickAction(action) {
-    if (action === 'summarize') {
-      setActiveTab('summary');
-      summarizePage(true);
-    } else if (action === 'qa') setActiveTab('chat');
-    else if (action === 'translate' || action === 'export') setActiveTab('tools');
-    else if (action === 'keys') setActiveTab('keys');
-  }
+  }, [pageContext.url, extractPageContent]);
 
   return (
     <div className={`${theme === 'dark' ? 'dark' : ''} flex h-screen w-full flex-col overflow-hidden bg-background`}>
       <div className="flex h-full w-full flex-col bg-background text-foreground overflow-hidden">
+        {/* Compact Combined Header (Logo + Page Context Badge + Model Selector + Theme + User) */}
         <Header
           user={user}
           userPlan={userPlan}
           theme={theme}
           onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           onLoginClick={() => setLoginOpen(true)}
+          pageContext={pageContext}
+          currentModel={currentModel}
+          onSelectModel={setCurrentModel}
           onLogout={async () => {
             if (!isDemoMode) await supabase.auth.signOut();
             setUser(isDemoMode ? demoUser : null);
@@ -278,14 +300,23 @@ export default function App() {
             lastSummarizedUrlRef.current = '';
           }}
         />
-        <ContextBar pageType={pageContext.pageType} title={pageContext.title} />
+
+        {/* Sleek Segmented Tab Bar */}
         <TabBar activeTab={activeTab} onChange={setActiveTab} />
-        <div className="flex-1 overflow-hidden bg-background">
+
+        {/* Main Content Area (Maximizes Viewport) */}
+        <main className="flex-1 overflow-hidden bg-background">
           <div className={activeTab === 'summary' ? 'h-full' : 'hidden h-full'} id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
             <SummaryTab data={summaryData} loading={loading} error={error} pageContext={pageContext} onRetry={() => summarizePage(true)} />
           </div>
           <div className={activeTab === 'chat' ? 'h-full' : 'hidden h-full'} id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
-            <ChatTab pageContext={{ ...pageContext, content: pageContent }} summaryData={summaryData} user={user} />
+            <ChatTab
+              pageContext={{ ...pageContext, content: pageContent }}
+              summaryData={summaryData}
+              user={user}
+              onExtractContent={extractPageContent}
+              currentModel={currentModel}
+            />
           </div>
           <div className={activeTab === 'timeline' ? 'h-full' : 'hidden h-full'} id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline">
             <TimelineTab timestamps={summaryData?.timestamps} pageContext={pageContext} />
@@ -296,8 +327,8 @@ export default function App() {
           <div className={activeTab === 'keys' ? 'h-full' : 'hidden h-full'} id="panel-keys" role="tabpanel" aria-labelledby="tab-keys">
             <ApiKeysTab />
           </div>
-        </div>
-        <Footer onQuickAction={handleQuickAction} activeTab={activeTab} />
+        </main>
+
         <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} onSuccess={(u) => { setUser(u); setLoginOpen(false); }} />
       </div>
     </div>
