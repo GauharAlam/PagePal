@@ -31,6 +31,23 @@ export default function SummaryTab({
   const [asking, setAsking] = useState(false);
   const followupsEndRef = useRef(null);
 
+  // Dynamic AI suggestions derived directly from the analyzed page content
+  const aiFollowups = data?.followupQuestions && data.followupQuestions.length > 0
+    ? data.followupQuestions
+    : data?.keyPoints && data.keyPoints.length > 0
+    ? [
+        `Explain "${data.keyPoints[0].slice(0, 36)}…" in detail`,
+        data.keyPoints[1] ? `How does "${data.keyPoints[1].slice(0, 36)}…" work?` : 'Give real-world practical examples',
+        'What are the key counterpoints or limitations?',
+        'What are the future implications?',
+      ]
+    : [
+        'Explain the core thesis in more detail',
+        'What are the main counterpoints or limitations?',
+        'Give real-world practical examples',
+        'What are the future implications?',
+      ];
+
   async function getToken() {
     if (isDemoMode) return demoSession.access_token;
     const { data: { session } } = await supabase.auth.getSession();
@@ -309,16 +326,17 @@ export default function SummaryTab({
           )}
         </div>
 
-        {/* 1-Click Suggestion Chips */}
+        {/* 1-Click AI-Generated Content Suggestions */}
         <div className="flex flex-wrap gap-1.5">
-          {SUGGESTED_FOLLOWUPS.map((suggestion, idx) => (
+          {aiFollowups.slice(0, 4).map((suggestion, idx) => (
             <button
               key={idx}
               disabled={asking}
               onClick={() => handleAskFollowup(suggestion)}
-              className="rounded-full border border-border/70 bg-card/80 px-2.5 py-1 text-left text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-foreground"
+              className="rounded-full border border-border/70 bg-card/80 px-2.5 py-1 text-left text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-foreground flex items-center gap-1"
             >
-              {suggestion}
+              <span>✨</span>
+              <span>{suggestion}</span>
             </button>
           ))}
         </div>

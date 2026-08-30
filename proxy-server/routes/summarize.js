@@ -4,8 +4,8 @@ import { getSupabase, getAnthropic } from '../lib/supabase.js';
 import { hasOpenRouter, openRouterCreate, cleanThinkingTags } from '../lib/openrouter.js';
 import { validate, summarizeSchema } from '../lib/validate.js';
 import { env } from '../lib/env.js';
-import { mockSummary } from '../lib/demo.js';
-import { sanitizeContent, sanitizeTitle, sanitizeUrl } from '../lib/sanitize.js';
+import { mockSummarize } from '../lib/demo.js';
+import { sanitizeContent, sanitizeTitle } from '../lib/sanitize.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -13,40 +13,33 @@ const FREE_SUMMARY_LIMIT = 5;
 
 router.post('/api/summarize', requireAuth, validate(summarizeSchema), async (req, res) => {
   try {
-    const { content: rawContent, pageType, title: rawTitle, url: rawUrl, model } = req.body;
-    const content = sanitizeContent(rawContent);
+    const { content: rawContent, pageType, title: rawTitle, url, model, forceRefresh } = req.body;
     const title = sanitizeTitle(rawTitle);
-    const url = sanitizeUrl(rawUrl);
+    const content = sanitizeContent(rawContent);
 
-    // If OpenRouter is configured, use it even in Supabase-demo
     const useOpenRouter = hasOpenRouter();
-    const useMock = !useOpenRouter && env.DEMO_MODE;
-
-    if (useMock) {
-      logger.info('DEMO_MODE summarize → mock response');
-      return res.json(mockSummary({ content, pageType, title }));
+    if (!useOpenRouter && env.DEMO_MODE) {
+      logger.info('DEMO_MODE summarize → mock');
+      return res.json(mockSummarize({ title, pageType }));
     }
 
     let supabase = null;
-    try { supabase = getSupabase(); } catch (e) {
-      logger.debug('Supabase client unavailable during summarize check');
-    }
+    try { supabase = getSupabase(); } catch {}
 
     if (supabase && req.userPlan?.plan === 'free' && req.userPlan.daily_summaries >= FREE_SUMMARY_LIMIT) {
       return res.status(429).json({
         error: 'Daily summary limit reached',
-        message: `Free plan allows ${FREE_SUMMARY_LIMIT} summaries per day. Upgrade to Pro for unlimited access.`,
+        message: `Free plan allows ${FREE_SUMMARY_LIMIT} summaries per day. Upgrade to Pro for unlimited access or BYOK.`,
         upgrade: true,
       });
     }
 
-    // Server-side cache check
-    if (supabase && url && req.body.forceRefresh !== true) {
+    // Cache check
+    if (supabase && url && !forceRefresh) {
       try {
         const { data: cached } = await supabase
           .from('saved_summaries')
-          .select('summary, key_points, timestamps, created_at')
-          .eq('user_id', req.user.id)
+          .select('summary, key_points, timestamps, followup_questions, created_at')
           .eq('page_url', url)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -60,6 +53,7 @@ router.post('/api/summarize', requireAuth, validate(summarizeSchema), async (req
               summary: cached.summary,
               keyPoints: cached.key_points || [],
               timestamps: cached.timestamps || [],
+              followupQuestions: cached.followup_questions || [],
               cached: true,
             });
           }
@@ -85,12 +79,18 @@ Analyze the provided content and respond ONLY with valid JSON matching this sche
   ],
   "sentiment": "positive",
   "readingTime": "3 min read",
-  "language": "English"
+  "language": "English",
+  "followupQuestions": [
+    "Specific, high-curiosity question about a core topic or claim in this content?",
+    "Specific question about a mechanism, data point, or evidence mentioned?",
+    "Specific question exploring counter-arguments, alternatives, or future applications?"
+  ]
 }
 Rules:
 - sentiment must be one of: "positive", "neutral", "negative".
 - For YouTube videos, include chronological timestamps if transcript details are present, otherwise provide [].
 - keyPoints must contain exactly 5 high-value takeaways.
+- followupQuestions must contain 3-4 specific questions directly relevant to the unique content of this page.
 - Output pure JSON only. Do not include markdown code block tags, preambles, or conversational commentary.`;
 
     let raw = '';
@@ -100,15 +100,15 @@ Rules:
         model,
         system: systemPrompt,
         messages: [{ role: 'user', content: `Content to analyze:\n\n${content.slice(0, 16000)}` }],
-        max_tokens: 1500,
-        timeoutMs: 30000,
+        max_tokens: 1800,
+        timeoutMs: 45000,
       });
       raw = msg.content[0]?.text || '';
     } else {
       const anthropic = await getAnthropic();
       const msg = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
+        max_tokens: 1800,
         messages: [{ role: 'user', content: `Content to analyze:\n\n${content.slice(0, 16000)}` }],
         system: systemPrompt,
       });
@@ -128,9 +128,9 @@ Rules:
     let parsed;
     try {
       parsed = JSON.parse(cleaned);
-      // Validate structure
       if (!parsed.summary) throw new Error('Missing summary property');
       if (!Array.isArray(parsed.keyPoints)) parsed.keyPoints = [];
+      if (!Array.isArray(parsed.followupQuestions)) parsed.followupQuestions = [];
     } catch (e) {
       logger.error('JSON parse failed on AI response', { snippet: raw.slice(0, 400), error: e.message });
       // Fallback rescue
@@ -141,6 +141,11 @@ Rules:
         sentiment: 'neutral',
         readingTime: '2 min read',
         language: 'English',
+        followupQuestions: [
+          'What are the core arguments in this piece?',
+          'What are the practical applications of this?',
+          'What are the limitations or counterpoints?'
+        ],
       };
     }
 
