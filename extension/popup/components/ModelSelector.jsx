@@ -24,20 +24,22 @@ export default function ModelSelector({ currentModel, onSelectModel }) {
     <div className="relative z-50">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full border border-black/10 dark:border-white/15 bg-white/40 dark:bg-white/10 px-2.5 py-1 text-xs font-semibold shadow-xs backdrop-blur-md transition-colors hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="flex h-6 items-center gap-1 rounded-full border border-black/10 dark:border-white/15 bg-white/40 dark:bg-white/10 px-2 text-[10px] font-semibold shadow-xs backdrop-blur-md transition-colors hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         aria-label="Select AI Model"
         aria-expanded={open}
       >
-        <span className="text-xs" aria-hidden>{selected.icon}</span>
-        <span className="font-bold text-foreground max-w-[90px] truncate">{selected.name}</span>
-        <span className="rounded bg-emerald-500/15 px-1 py-0.2 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">FREE</span>
-        <span className="text-[10px] text-muted-foreground">▾</span>
+        <span className="text-xs shrink-0" aria-hidden>{selected.icon}</span>
+        <span className="font-bold text-foreground max-w-[65px] min-[360px]:max-w-[85px] truncate">{selected.name}</span>
+        <span className="hidden min-[380px]:inline-block rounded bg-emerald-500/15 px-1 py-0.2 text-[8px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+          FREE
+        </span>
+        <span className="text-[9px] text-muted-foreground shrink-0">▾</span>
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-50 bg-black/10 dark:bg-black/40 backdrop-blur-xs" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-9 z-50 w-64 max-h-80 overflow-y-auto animate-fade-in rounded-2xl border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-2xl">
+          <div className="absolute right-0 top-8 z-50 w-64 max-h-80 overflow-y-auto animate-fade-in rounded-2xl border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-2xl">
             <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/40 pb-1">
               <span>OpenRouter Free Models</span>
               <span className="text-[9px] text-emerald-500 font-bold">100% Free</span>
