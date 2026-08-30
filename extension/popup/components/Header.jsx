@@ -23,7 +23,7 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
   const pageBadge = (pageContext?.pageType || 'page').toUpperCase();
 
   return (
-    <header className="mx-2 mt-2 mb-1 flex items-center justify-between gap-2 rounded-2xl border border-border/70 bg-card/65 px-3 py-2 shadow-xs backdrop-blur-xl transition-all supports-[backdrop-filter]:bg-card/50">
+    <header className="relative z-50 mx-2.5 mt-2.5 mb-1.5 flex items-center justify-between gap-2 rounded-2xl border border-black/10 dark:border-white/15 bg-white/30 dark:bg-black/35 px-3 py-2 shadow-lg backdrop-blur-2xl transition-all supports-[backdrop-filter]:bg-white/20 dark:supports-[backdrop-filter]:bg-black/25">
       {/* Left branding + Page Badge */}
       <div className="flex items-center gap-2 min-w-0">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-primary text-xs font-black text-black shadow-hard-sm" aria-hidden>
@@ -49,7 +49,7 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
         <button
           onClick={onThemeToggle}
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card/80 text-xs transition-colors hover:bg-accent"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-black/10 dark:border-white/15 bg-white/40 dark:bg-white/10 text-xs transition-colors hover:bg-accent/80 backdrop-blur-md"
         >
           <span aria-hidden>{theme === 'dark' ? '☀' : '◐'}</span>
         </button>
@@ -58,7 +58,7 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
           <div className="relative">
             <button
               onClick={() => setShowMenu((v) => !v)}
-              className="flex h-7 items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 text-xs font-semibold shadow-xs hover:bg-accent"
+              className="flex h-7 items-center gap-1.5 rounded-full border border-black/10 dark:border-white/15 bg-white/40 dark:bg-white/10 px-2.5 text-xs font-semibold shadow-xs hover:bg-accent/80 backdrop-blur-md"
               aria-expanded={showMenu}
             >
               <span className="max-w-[65px] truncate text-[11px]">
@@ -70,8 +70,8 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-9 z-50 w-60 animate-fade-in rounded-xl border-2 border-border bg-card p-1.5 shadow-hard">
-                  <div className="flex flex-col gap-1 rounded-lg bg-muted/40 p-2.5">
+                <div className="absolute right-0 top-9 z-50 w-60 animate-fade-in rounded-2xl border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-2xl">
+                  <div className="flex flex-col gap-1 rounded-xl bg-muted/50 p-2.5">
                     <span className="truncate text-xs font-bold">{user.email}</span>
                     <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${isPro ? 'text-emerald-500' : 'text-muted-foreground'}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${isPro ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />

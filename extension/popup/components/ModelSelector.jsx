@@ -21,26 +21,26 @@ export default function ModelSelector({ currentModel, onSelectModel }) {
   const selected = OPENROUTER_FREE_MODELS.find((m) => m.id === currentModel) || OPENROUTER_FREE_MODELS[0];
 
   return (
-    <div className="relative">
+    <div className="relative z-50">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold shadow-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="flex items-center gap-1.5 rounded-full border border-black/10 dark:border-white/15 bg-white/40 dark:bg-white/10 px-2.5 py-1 text-xs font-semibold shadow-xs backdrop-blur-md transition-colors hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         aria-label="Select AI Model"
         aria-expanded={open}
       >
         <span className="text-xs" aria-hidden>{selected.icon}</span>
         <span className="font-bold text-foreground max-w-[90px] truncate">{selected.name}</span>
-        <span className="rounded bg-emerald-500/10 px-1 py-0.2 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">FREE</span>
+        <span className="rounded bg-emerald-500/15 px-1 py-0.2 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">FREE</span>
         <span className="text-[10px] text-muted-foreground">▾</span>
       </button>
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-9 z-50 w-64 max-h-80 overflow-y-auto animate-fade-in rounded-xl border-2 border-border bg-card p-1.5 shadow-hard">
+          <div className="fixed inset-0 z-50 bg-black/10 dark:bg-black/40 backdrop-blur-xs" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-9 z-50 w-64 max-h-80 overflow-y-auto animate-fade-in rounded-2xl border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-2xl">
             <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/40 pb-1">
               <span>OpenRouter Free Models</span>
-              <span className="text-[9px] text-emerald-500 font-semibold">100% Free</span>
+              <span className="text-[9px] text-emerald-500 font-bold">100% Free</span>
             </div>
             <div className="flex flex-col gap-1 mt-1">
               {OPENROUTER_FREE_MODELS.map((m) => {
@@ -52,10 +52,10 @@ export default function ModelSelector({ currentModel, onSelectModel }) {
                       onSelectModel(m.id);
                       setOpen(false);
                     }}
-                    className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
+                    className={`flex items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs transition-colors ${
                       isSelected
                         ? 'bg-primary/20 font-bold text-foreground border border-primary/50'
-                        : 'hover:bg-accent text-muted-foreground hover:text-foreground'
+                        : 'hover:bg-accent/70 text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
