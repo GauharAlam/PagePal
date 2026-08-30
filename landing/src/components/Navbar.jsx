@@ -7,7 +7,6 @@ const LINKS = [
   { label: 'How it Works', href: '#how-it-works' },
   { label: 'Pricing', href: '#pricing' },
   { label: 'Privacy', href: '#privacy' },
-  { label: 'GitHub', href: GITHUB_REPO_URL },
 ];
 
 export default function Navbar() {
