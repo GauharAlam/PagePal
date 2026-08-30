@@ -126,8 +126,8 @@ Respond ONLY with valid JSON in this exact structure:
   "questions": [
     {
       "q": "Clear question text?",
-      "options": ["A) First option", "B) Second option", "C) Third option", "D) Fourth option"],
-      "answer": "A) First option",
+      "options": ["First option", "Second option", "Third option", "Fourth option"],
+      "answer": "First option",
       "explanation": "Concise explanation of why this answer is correct."
     }
   ]
@@ -163,11 +163,35 @@ ${content.slice(0, 12000)}`;
     const clean = first !== -1 && last !== -1 ? cleaned.slice(first, last + 1) : cleaned;
 
     try {
-      const parsed = JSON.parse(clean);
+      let parsed = JSON.parse(clean);
+      if (Array.isArray(parsed)) {
+        parsed = { questions: parsed };
+      }
       if (!Array.isArray(parsed.questions)) {
         throw new Error('Invalid questions array in response');
       }
-      res.json(parsed);
+
+      // Normalize questions and clean option prefixes
+      const normalizedQuestions = parsed.questions.map((qObj) => {
+        const rawOptions = Array.isArray(qObj.options) ? qObj.options : [];
+        const cleanOptions = rawOptions.map((opt) => String(opt).replace(/^[A-D]\s*[\)\.\:\-]\s*/i, '').trim());
+        let cleanAnswer = String(qObj.answer || '').replace(/^[A-D]\s*[\)\.\:\-]\s*/i, '').trim();
+
+        // If answer was specified as just a letter like "A", map to corresponding option
+        if (/^[A-D]$/i.test(cleanAnswer)) {
+          const idx = cleanAnswer.toUpperCase().charCodeAt(0) - 65;
+          if (cleanOptions[idx]) cleanAnswer = cleanOptions[idx];
+        }
+
+        return {
+          q: qObj.q || 'Question',
+          options: cleanOptions,
+          answer: cleanAnswer || cleanOptions[0] || '',
+          explanation: qObj.explanation || 'Correct concept from the page.',
+        };
+      });
+
+      res.json({ questions: normalizedQuestions });
     } catch (parseErr) {
       logger.error('Quiz JSON parse failed', { snippet: raw.slice(0, 300), error: parseErr.message });
       res.status(502).json({ error: 'Quiz generation format error, please retry' });

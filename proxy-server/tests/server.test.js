@@ -101,6 +101,13 @@ describe('Validation Schemas Tests', () => {
     const resInvalid = translateSchema.safeParse(invalid);
     assert.ok(!resInvalid.success);
   });
+
+  test('quizSchema validates content, title and model', () => {
+    const valid = { content: 'Content for quiz', title: 'Quiz Topic', model: 'openrouter/free' };
+    const result = quizSchema.safeParse(valid);
+    assert.ok(result.success);
+    assert.equal(result.data.model, 'openrouter/free');
+  });
 });
 
 describe('Reasoning Tags Sanitization Tests', () => {
