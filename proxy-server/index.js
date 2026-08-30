@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
 import { env, getCorsOrigins } from './lib/env.js';
+import { logger } from './lib/logger.js';
 import summarizeRouter from './routes/summarize.js';
 import askRouter from './routes/ask.js';
 import translateRouter from './routes/translate.js';
@@ -23,7 +24,7 @@ app.use(helmet({
 app.use(cors({
   origin: getCorsOrigins(),
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature', 'x-demo-plan'],
 }));
 
 // Stripe webhook needs raw body — mount BEFORE json parser
@@ -32,22 +33,42 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), hand
 // JSON parser for rest
 app.use(express.json({ limit: '2mb' }));
 
-// Rate limiter: 60 req/min per IP (tune via env)
-const limiter = rateLimit({
+// Global IP-based rate limiter (60 req/min)
+const ipLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: parseInt(process.env.MAX_REQUESTS_PER_MINUTE || '60', 10),
+  max: env.MAX_REQUESTS_PER_MINUTE,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please slow down' },
 });
-app.use('/api/', limiter);
+app.use('/api/', ipLimiter);
 
-// Request logging
+// Per-User / Per-Token rate limiter (30 req/min on AI endpoints)
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return authHeader.slice(7, 30); // Use token prefix as key
+    }
+    return req.ip;
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'AI request rate limit exceeded. Please wait a moment before trying again.' },
+});
+
+// Request logging with logger
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`${req.method} ${req.path} → ${res.statusCode} (${duration}ms)`);
+    logger.info(`${req.method} ${req.path}`, {
+      status: res.statusCode,
+      durationMs: duration,
+      ip: req.ip,
+    });
   });
   next();
 });
@@ -63,10 +84,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Routes
-app.use(summarizeRouter);
-app.use(askRouter);
-app.use(translateRouter);
+// Apply AI rate limiter to generation routes
+app.use('/api/summarize', aiLimiter, summarizeRouter);
+app.use('/api/chat', aiLimiter, askRouter);
+app.use('/api/quiz', aiLimiter, askRouter);
+app.use('/api/translate', aiLimiter, translateRouter);
 app.use(billingRouter);
 app.use(byokRouter);
 
@@ -77,7 +99,7 @@ app.use((req, res) => {
 
 // Error handler — never leak internals in prod
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
+  logger.error('Unhandled server error', { error: err.message, stack: err.stack, path: req.path });
   if (err.message && err.message.includes('CORS')) {
     return res.status(403).json({ error: err.message });
   }
@@ -87,14 +109,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🧠 PagePal AI proxy server running on port ${PORT} [${env.NODE_ENV}]${env.DEMO_MODE ? ' — 📦 DEMO_MODE (mock AI, no keys needed)' : ''}`);
-  console.log(`   Health: http://localhost:${PORT}/api/health`);
-  console.log(`   Routes: /api/summarize, /api/chat, /api/quiz, /api/translate, /api/billing/*, /api/webhooks/stripe\n`);
+const server = app.listen(PORT, () => {
+  logger.info(`PagePal AI proxy server running on port ${PORT} [${env.NODE_ENV}]${env.DEMO_MODE ? ' (DEMO_MODE)' : ''}`);
+  logger.info(`Health: http://localhost:${PORT}/api/health`);
   if (env.DEMO_MODE) {
-    console.log('   Demo: All AI routes return mock data. Add real ANTHROPIC_API_KEY + SUPABASE_URL to exit demo.');
+    logger.warn('Demo: All AI routes return mock data unless OpenRouter or Anthropic keys are configured.');
   }
-  if (!env.ANTHROPIC_API_KEY || env.ANTHROPIC_API_KEY.includes('your-')) console.warn('⚠️  ANTHROPIC_API_KEY not set');
-  if (!env.SUPABASE_URL || env.SUPABASE_URL.includes('your-')) console.warn('⚠️  SUPABASE_URL not set');
-  if (!env.STRIPE_SECRET_KEY) console.warn('⚠️  STRIPE_SECRET_KEY not set — billing disabled');
 });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    logger.info('HTTP server closed');
+  });
+});
+
+export default app;

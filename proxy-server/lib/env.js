@@ -1,46 +1,50 @@
 import dotenv from 'dotenv';
+import { z } from 'zod';
+
 dotenv.config();
 
-function requireEnv(name, fallback = undefined) {
-  const v = process.env[name] ?? fallback;
-  if (!v || v.includes('your-') || v.includes('placeholder')) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error(`❌ Missing required env var: ${name}`);
-      process.exit(1);
-    } else {
-      console.warn(`⚠️  Env ${name} is placeholder/missing (dev mode allows).`);
-    }
+export const isDemo = (v) => !v || v.includes('your-') || v.includes('placeholder') || v.includes('sk-ant-your') || v.includes('your_');
+
+const envSchema = z.object({
+  PORT: z.coerce.number().default(3001),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  ANTHROPIC_API_KEY: z.string().default(''),
+  OPENROUTER_API_KEY: z.string().default(''),
+  OPENROUTER_MODEL: z.string().default('z-ai/glm-4.5'),
+  SUPABASE_URL: z.string().default(''),
+  SUPABASE_SERVICE_KEY: z.string().default(''),
+  ENCRYPTION_SECRET: z.string().default(''),
+  STRIPE_SECRET_KEY: z.string().default(''),
+  STRIPE_WEBHOOK_SECRET: z.string().default(''),
+  STRIPE_PRO_PRICE_ID: z.string().default(''),
+  FRONTEND_URL: z.string().default('http://localhost:5173'),
+  ALLOWED_ORIGINS: z.string().default(''),
+  MAX_REQUESTS_PER_MINUTE: z.coerce.number().default(60),
+});
+
+const parsed = envSchema.safeParse(process.env);
+if (!parsed.success) {
+  console.error('❌ Environment validation failed:', parsed.error.format());
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
   }
-  return v;
 }
 
-export const isDemo = (v) => !v || v.includes('your-') || v.includes('placeholder');
+const rawEnv = parsed.success ? parsed.data : {};
 
 export const env = {
-  PORT: parseInt(process.env.PORT || '3001', 10),
-  NODE_ENV: process.env.NODE_ENV || 'development',
-  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
-  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || 'z-ai/glm-4.5',
-  SUPABASE_URL: requireEnv('SUPABASE_URL'),
-  SUPABASE_SERVICE_KEY: requireEnv('SUPABASE_SERVICE_KEY'),
-  DEMO_MODE: (isDemo(process.env.ANTHROPIC_API_KEY) && isDemo(process.env.OPENROUTER_API_KEY)) || isDemo(process.env.SUPABASE_URL),
-  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
-  STRIPE_PRO_PRICE_ID: process.env.STRIPE_PRO_PRICE_ID || '',
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
-  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || '')
+  ...rawEnv,
+  DEMO_MODE: (isDemo(rawEnv.ANTHROPIC_API_KEY) && isDemo(rawEnv.OPENROUTER_API_KEY)) || isDemo(rawEnv.SUPABASE_URL),
+  ALLOWED_ORIGINS: (rawEnv.ALLOWED_ORIGINS || '')
     .split(',')
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean),
 };
 
 export function getCorsOrigins() {
-  // In dev, allow all extension origins + localhost
-  if (env.NODE_ENV !== 'production') return true; // reflect request origin
-  // In prod, strict allowlist + chrome-extension scheme
+  if (env.NODE_ENV !== 'production') return true;
   return (origin, cb) => {
-    if (!origin) return cb(null, true); // curl/health
+    if (!origin) return cb(null, true);
     if (origin.startsWith('chrome-extension://')) return cb(null, true);
     if (env.ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     if (origin === env.FRONTEND_URL) return cb(null, true);

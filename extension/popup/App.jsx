@@ -27,12 +27,12 @@ export default function App() {
   const lastSummarizedUrlRef = useRef('');
   const autoSummarizeRef = useRef(null);
 
-  // Persist theme to storage & apply dark class
+  // Persist theme to storage
   useEffect(() => {
     try { localStorage.setItem('pagepal-theme', theme); } catch {}
   }, [theme]);
 
-  // Init auth & page context — demo bypass
+  // Init auth & page context
   useEffect(() => {
     let sub;
     if (isDemoMode) {
@@ -51,7 +51,6 @@ export default function App() {
       sub = subscription;
     }
 
-    // Prefer session, fallback to local (persisted), then tabs.query
     const loadContext = async () => {
       try {
         const tryGet = async (area) => {
@@ -64,9 +63,13 @@ export default function App() {
           setPageContext({ pageType: result.pageType || 'general', url: result.tabUrl || '', title: result.tabTitle || 'Current Page' });
           return;
         }
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.url) setPageContext({ pageType: detectType(tab.url), url: tab.url, title: tab.title || 'Current Page' });
-      } catch {}
+        if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tab?.url) setPageContext({ pageType: detectType(tab.url), url: tab.url, title: tab.title || 'Current Page' });
+        }
+      } catch (err) {
+        console.warn('Context load error:', err);
+      }
     };
     loadContext();
     return () => sub?.unsubscribe();
@@ -93,19 +96,24 @@ export default function App() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setUserPlan(await res.json());
-    } catch {}
+    } catch (err) {
+      console.warn('Plan fetch failed:', err);
+    }
   }
 
-  // Extract page content via content_script messaging (fallback to executeScript)
+  // Extract page content safely
   async function extractPageContent() {
+    if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
+      return { type: 'article', title: document.title, content: 'Sample development content' };
+    }
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('No active tab');
-    // Try messaging content_script first
+
     try {
       const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' });
       if (resp?.content) return resp;
     } catch {}
-    // Fallback: inject
+
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
@@ -129,14 +137,31 @@ export default function App() {
     return results[0]?.result;
   }
 
-  const autoSummarize = useCallback(async () => {
+  const summarizePage = useCallback(async (force = false) => {
     const url = pageContext.url;
-    if (!url || url === lastSummarizedUrlRef.current) return;
+    if (!url) return;
+    if (!force && url === lastSummarizedUrlRef.current && summaryData) return;
     if (!user) return;
-    if (autoSummarizeRef.current) return; // prevent concurrent
+    if (autoSummarizeRef.current) return;
     autoSummarizeRef.current = true;
     setLoading(true);
     setError(null);
+
+    // Check local storage cache first (unless force refresh)
+    if (!force && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try {
+        const cacheKey = `summary_${url}`;
+        const cached = await new Promise((res) => chrome.storage.local.get(cacheKey, (d) => res(d[cacheKey])));
+        if (cached && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
+          setSummaryData({ ...cached.data, cached: true });
+          lastSummarizedUrlRef.current = url;
+          setLoading(false);
+          autoSummarizeRef.current = null;
+          return;
+        }
+      } catch {}
+    }
+
     try {
       const pageData = await extractPageContent();
       if (!pageData?.content) throw new Error('Could not extract page content. Try refreshing the page.');
@@ -160,6 +185,7 @@ export default function App() {
           pageType: pageData.type,
           title: pageData.title,
           url,
+          forceRefresh: force,
         }),
         signal: controller.signal,
       });
@@ -167,33 +193,68 @@ export default function App() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 429 || data.upgrade) { setError(data); return; }
-        throw new Error(data.error || `API ${res.status}`);
+        throw new Error(data.error || `API error ${res.status}`);
       }
       setSummaryData(data);
       lastSummarizedUrlRef.current = url;
+
+      // Cache locally
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        try {
+          chrome.storage.local.set({ [`summary_${url}`]: { data, timestamp: Date.now() } });
+        } catch {}
+      }
+
       fetchPlan(token);
     } catch (err) {
-      console.error('Auto-summarize failed:', err);
-      const msg = err.name === 'AbortError' ? 'Request timed out. Try again.' : err.message || 'Failed to summarize';
+      console.error('Summarize failed:', err);
+      const msg = err.name === 'AbortError' ? 'Request timed out. Please try again.' : err.message || 'Failed to summarize';
       setError({ error: msg });
     } finally {
       setLoading(false);
       autoSummarizeRef.current = null;
     }
-  }, [pageContext.url, user]);
+  }, [pageContext.url, user, summaryData]);
 
-  // Debounced auto-summarize — stable deps, no loading race
+  // Tab change listener with memory cleanup
   useEffect(() => {
-    if (!user || !pageContext.url) return;
-    if (pageContext.url === lastSummarizedUrlRef.current) return;
-    const t = setTimeout(() => { autoSummarize(); }, 500);
-    return () => clearTimeout(t);
-  }, [user, pageContext.url, autoSummarize]);
+    if (typeof chrome === 'undefined' || !chrome.tabs) return;
+
+    const handleActivated = async (activeInfo) => {
+      try {
+        const tab = await chrome.tabs.get(activeInfo.tabId);
+        if (tab?.url && tab.url !== pageContext.url) {
+          setPageContext({ pageType: detectType(tab.url), url: tab.url, title: tab.title || 'Current Page' });
+          setSummaryData(null);
+          setPageContent('');
+          setError(null);
+        }
+      } catch {}
+    };
+
+    const handleUpdated = (tabId, changeInfo, tab) => {
+      if (changeInfo.status === 'complete' && tab?.url && tab.url !== pageContext.url) {
+        setPageContext({ pageType: detectType(tab.url), url: tab.url, title: tab.title || 'Current Page' });
+        setSummaryData(null);
+        setPageContent('');
+        setError(null);
+      }
+    };
+
+    chrome.tabs.onActivated?.addListener(handleActivated);
+    chrome.tabs.onUpdated?.addListener(handleUpdated);
+
+    // Return cleanup to prevent memory leak!
+    return () => {
+      chrome.tabs.onActivated?.removeListener(handleActivated);
+      chrome.tabs.onUpdated?.removeListener(handleUpdated);
+    };
+  }, [pageContext.url]);
 
   function handleQuickAction(action) {
     if (action === 'summarize') {
       setActiveTab('summary');
-      if (pageContext.url !== lastSummarizedUrlRef.current) autoSummarize();
+      summarizePage(true);
     } else if (action === 'qa') setActiveTab('chat');
     else if (action === 'translate' || action === 'export') setActiveTab('tools');
     else if (action === 'keys') setActiveTab('keys');
@@ -208,16 +269,23 @@ export default function App() {
           theme={theme}
           onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           onLoginClick={() => setLoginOpen(true)}
-          onLogout={async () => { if (!isDemoMode) await supabase.auth.signOut(); setUser(isDemoMode ? demoUser : null); setUserPlan(isDemoMode ? { plan: 'free', daily_summaries: 0, daily_chats: 0 } : null); setSummaryData(null); setError(null); lastSummarizedUrlRef.current=''; }}
+          onLogout={async () => {
+            if (!isDemoMode) await supabase.auth.signOut();
+            setUser(isDemoMode ? demoUser : null);
+            setUserPlan(isDemoMode ? { plan: 'free', daily_summaries: 0, daily_chats: 0 } : null);
+            setSummaryData(null);
+            setError(null);
+            lastSummarizedUrlRef.current = '';
+          }}
         />
         <ContextBar pageType={pageContext.pageType} title={pageContext.title} />
         <TabBar activeTab={activeTab} onChange={setActiveTab} />
         <div className="flex-1 overflow-hidden bg-background">
           <div className={activeTab === 'summary' ? 'h-full' : 'hidden h-full'} id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
-            <SummaryTab data={summaryData} loading={loading} error={error} pageContext={pageContext} onRetry={autoSummarize} />
+            <SummaryTab data={summaryData} loading={loading} error={error} pageContext={pageContext} onRetry={() => summarizePage(true)} />
           </div>
           <div className={activeTab === 'chat' ? 'h-full' : 'hidden h-full'} id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
-            <ChatTab pageContext={{...pageContext, content: pageContent}} summaryData={summaryData} user={user} />
+            <ChatTab pageContext={{ ...pageContext, content: pageContent }} summaryData={summaryData} user={user} />
           </div>
           <div className={activeTab === 'timeline' ? 'h-full' : 'hidden h-full'} id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline">
             <TimelineTab timestamps={summaryData?.timestamps} pageContext={pageContext} />

@@ -5,6 +5,7 @@ import { hasOpenRouter, openRouterCreate } from '../lib/openrouter.js';
 import { validate, chatSchema, quizSchema } from '../lib/validate.js';
 import { env } from '../lib/env.js';
 import { mockChat, mockQuiz } from '../lib/demo.js';
+import { sanitizeContent, sanitizeTitle } from '../lib/sanitize.js';
 
 const router = Router();
 const FREE_CHAT_LIMIT = 10;
@@ -12,7 +13,14 @@ const FREE_CHAT_LIMIT = 10;
 // Chat endpoint
 router.post('/api/chat', requireAuth, validate(chatSchema), async (req, res) => {
   try {
-    const { messages, context, pageType, title } = req.body;
+    const { messages: rawMessages, context: rawContext, pageType, title: rawTitle } = req.body;
+    const title = sanitizeTitle(rawTitle);
+    const context = sanitizeContent(rawContext);
+    const messages = rawMessages.map(m => ({
+      role: m.role,
+      content: sanitizeContent(m.content)
+    }));
+
     const useOpenRouter = hasOpenRouter();
     if (!useOpenRouter && env.DEMO_MODE) {
       console.log('📦 DEMO_MODE chat → mock');
@@ -79,7 +87,10 @@ Rules:
 // Quiz generator — Pro only
 router.post('/api/quiz', requireAuth, validate(quizSchema), async (req, res) => {
   try {
-    const { content, title } = req.body;
+    const { content: rawContent, title: rawTitle } = req.body;
+    const title = sanitizeTitle(rawTitle);
+    const content = sanitizeContent(rawContent);
+
     const useOpenRouter = hasOpenRouter();
     if (!useOpenRouter && env.DEMO_MODE) {
       console.log('📦 DEMO_MODE quiz → mock');

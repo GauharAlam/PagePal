@@ -1,5 +1,6 @@
 import { getSupabase } from '../lib/supabase.js';
 import { env } from '../lib/env.js';
+import { logger } from '../lib/logger.js';
 
 export default async function requireAuth(req, res, next) {
   try {
@@ -7,11 +8,15 @@ export default async function requireAuth(req, res, next) {
     if (env.DEMO_MODE) {
       const authHeader = req.headers.authorization;
       const token = authHeader?.replace('Bearer ', '');
-      // In demo, accept demo token or missing token with mock user
       req.user = { id: 'demo-user-id', email: 'demo@pagepal.ai', user_metadata: {} };
-      // Preserve plan header if provided for testing pro? default free
       const demoPlan = req.headers['x-demo-plan'] || 'free';
-      req.userPlan = { plan: demoPlan, daily_summaries: 0, daily_chats: 0, last_reset_date: new Date().toISOString().split('T')[0], stripe_customer_id: null };
+      req.userPlan = {
+        plan: demoPlan,
+        daily_summaries: 0,
+        daily_chats: 0,
+        last_reset_date: new Date().toISOString().split('T')[0],
+        stripe_customer_id: null,
+      };
       req.isDemo = true;
       return next();
     }
@@ -41,31 +46,39 @@ export default async function requireAuth(req, res, next) {
 
     if (!planData) {
       // Create a free plan for new users
-      await supabase.from('user_plans').insert({
-        user_id: data.user.id,
-        plan: 'free',
-        daily_summaries: 0,
-        daily_chats: 0,
-        last_reset_date: new Date().toISOString().split('T')[0]
-      });
+      try {
+        await supabase.from('user_plans').insert({
+          user_id: data.user.id,
+          plan: 'free',
+          daily_summaries: 0,
+          daily_chats: 0,
+          last_reset_date: new Date().toISOString().split('T')[0],
+        });
+      } catch (insertErr) {
+        logger.warn('Failed to insert new user_plans row', { error: insertErr.message });
+      }
       req.userPlan = { plan: 'free', daily_summaries: 0, daily_chats: 0 };
     } else {
       // Reset daily counters if date changed
       const today = new Date().toISOString().split('T')[0];
       if (planData.last_reset_date !== today) {
-        await supabase
-          .from('user_plans')
-          .update({ daily_summaries: 0, daily_chats: 0, last_reset_date: today })
-          .eq('user_id', data.user.id);
-        planData.daily_summaries = 0;
-        planData.daily_chats = 0;
+        try {
+          await supabase
+            .from('user_plans')
+            .update({ daily_summaries: 0, daily_chats: 0, last_reset_date: today })
+            .eq('user_id', data.user.id);
+          planData.daily_summaries = 0;
+          planData.daily_chats = 0;
+        } catch (resetErr) {
+          logger.warn('Failed to reset daily counters', { error: resetErr.message });
+        }
       }
       req.userPlan = planData;
     }
 
     next();
   } catch (err) {
-    console.error('Auth middleware error:', err);
+    logger.error('Auth middleware exception', { error: err.message });
     res.status(500).json({ error: 'Authentication failed' });
   }
 }

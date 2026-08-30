@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { env } from '../lib/env.js';
 import { getSupabase } from '../lib/supabase.js';
 import requireAuth from '../middleware/requireAuth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ router.post('/api/billing/create-checkout', requireAuth, async (req, res) => {
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error('Checkout error:', err);
+    logger.error('Checkout error', { error: err.message });
     res.status(500).json({ error: err.message });
   }
 });
@@ -51,27 +52,29 @@ router.post('/api/billing/create-checkout', requireAuth, async (req, res) => {
 router.post('/api/billing/create-portal', requireAuth, async (req, res) => {
   try {
     const stripe = getStripe();
-    if (!req.userPlan.stripe_customer_id) return res.status(400).json({ error: 'No customer' });
+    if (!req.userPlan.stripe_customer_id) return res.status(400).json({ error: 'No active Stripe customer found' });
     const portal = await stripe.billingPortal.sessions.create({
       customer: req.userPlan.stripe_customer_id,
       return_url: `${env.FRONTEND_URL}/`,
     });
     res.json({ url: portal.url });
   } catch (err) {
-    console.error('Portal error:', err);
+    logger.error('Portal error', { error: err.message });
     res.status(500).json({ error: err.message });
   }
 });
 
-// Stripe webhook — must be mounted with raw body, handled in index.js separately for prod
-// This route is for JSON fallback (not used for signature verification)
 router.get('/api/billing/status', requireAuth, async (req, res) => {
-  res.json({ plan: req.userPlan.plan, daily_summaries: req.userPlan.daily_summaries, daily_chats: req.userPlan.daily_chats });
+  res.json({
+    plan: req.userPlan.plan,
+    daily_summaries: req.userPlan.daily_summaries,
+    daily_chats: req.userPlan.daily_chats,
+  });
 });
 
 export default router;
 
-// Webhook handler exported for index.js raw body
+// Webhook handler with idempotency check
 export async function handleStripeWebhook(req, res) {
   const stripe = getStripe();
   const sig = req.headers['stripe-signature'];
@@ -79,21 +82,38 @@ export async function handleStripeWebhook(req, res) {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error('Webhook sig fail:', err.message);
+    logger.error('Webhook signature verification failed', { error: err.message });
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  const supabase = getSupabase();
+  let supabase = null;
+  try { supabase = getSupabase(); } catch {}
+
+  if (supabase) {
+    // Idempotency: Check if this event was already processed
+    const { data: existing } = await supabase
+      .from('processed_stripe_events')
+      .select('event_id')
+      .eq('event_id', event.id)
+      .single();
+
+    if (existing) {
+      logger.info('Stripe event already processed, skipping', { eventId: event.id });
+      return res.json({ received: true, already_processed: true });
+    }
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId = session.metadata?.supabase_user_id || session.client_reference_id;
-        if (userId) {
+        if (userId && supabase) {
           await supabase.from('user_plans').update({
             plan: 'pro',
             stripe_customer_id: session.customer,
             stripe_subscription_id: session.subscription,
+            updated_at: new Date().toISOString(),
           }).eq('user_id', userId);
         }
         break;
@@ -102,26 +122,41 @@ export async function handleStripeWebhook(req, res) {
       case 'customer.subscription.created': {
         const sub = event.data.object;
         const customerId = sub.customer;
-        const status = sub.status; // active, past_due, etc.
+        const status = sub.status;
         const plan = status === 'active' || status === 'trialing' ? 'pro' : 'free';
-        await supabase.from('user_plans').update({
-          plan,
-          stripe_subscription_id: sub.id,
-        }).eq('stripe_customer_id', customerId);
+        if (supabase) {
+          await supabase.from('user_plans').update({
+            plan,
+            stripe_subscription_id: sub.id,
+            updated_at: new Date().toISOString(),
+          }).eq('stripe_customer_id', customerId);
+        }
         break;
       }
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
-        await supabase.from('user_plans').update({
-          plan: 'free',
-          stripe_subscription_id: null,
-        }).eq('stripe_customer_id', sub.customer);
+        if (supabase) {
+          await supabase.from('user_plans').update({
+            plan: 'free',
+            stripe_subscription_id: null,
+            updated_at: new Date().toISOString(),
+          }).eq('stripe_customer_id', sub.customer);
+        }
         break;
       }
     }
+
+    // Record event as processed for idempotency
+    if (supabase) {
+      await supabase.from('processed_stripe_events').insert({
+        event_id: event.id,
+        event_type: event.type,
+      });
+    }
+
     res.json({ received: true });
   } catch (err) {
-    console.error('Webhook handler error:', err);
+    logger.error('Webhook handler execution error', { error: err.message, eventId: event.id });
     res.status(500).json({ error: 'Webhook handler failed' });
   }
 }

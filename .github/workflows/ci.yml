@@ -40,15 +40,10 @@ jobs:
           cache-dependency-path: proxy-server/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Health check (dry run)
-        run: node --check index.js
-      - name: Run lint (if exists)
-        run: |
-          if npm run | grep -q "lint"; then
-            npm run lint
-          else
-            echo "No lint script found, skipping."
-          fi
+      - name: Run lint
+        run: npm run lint
+      - name: Run test suite
+        run: npm test
 
   build-extension:
     runs-on: ubuntu-latest

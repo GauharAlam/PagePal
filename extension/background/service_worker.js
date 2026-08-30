@@ -34,10 +34,28 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 });
 
 // Configure Chrome side panel to open on action click
-if (chrome.sidePanel?.setPanelBehavior) {
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((err) => console.error('Error setting sidePanel behavior:', err));
+function setupSidePanel() {
+  if (chrome.sidePanel?.setPanelBehavior) {
+    chrome.sidePanel
+      .setPanelBehavior({ openPanelOnActionClick: true })
+      .catch((err) => console.error('Error setting sidePanel behavior:', err));
+  }
+}
+setupSidePanel();
+
+// Fallback: If action icon is clicked and sidePanel didn't open automatically
+if (chrome.action?.onClicked) {
+  chrome.action.onClicked.addListener(async (tab) => {
+    try {
+      if (tab?.id) {
+        await chrome.sidePanel.open({ tabId: tab.id });
+      } else if (tab?.windowId) {
+        await chrome.sidePanel.open({ windowId: tab.windowId });
+      }
+    } catch (err) {
+      console.error('Error opening side panel from action click:', err);
+    }
+  });
 }
 
 // Handle messages from content scripts (e.g. floating button click)

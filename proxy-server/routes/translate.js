@@ -5,12 +5,15 @@ import { hasOpenRouter, openRouterCreate } from '../lib/openrouter.js';
 import { validate, translateSchema } from '../lib/validate.js';
 import { env } from '../lib/env.js';
 import { mockTranslate } from '../lib/demo.js';
+import { sanitizeContent } from '../lib/sanitize.js';
 
 const router = Router();
 
 router.post('/api/translate', requireAuth, validate(translateSchema), async (req, res) => {
   try {
-    const { text, targetLanguage } = req.body;
+    const { text: rawText, targetLanguage } = req.body;
+    const text = sanitizeContent(rawText);
+
     const useOpenRouter = hasOpenRouter();
     if (!useOpenRouter && env.DEMO_MODE) {
       console.log('📦 DEMO_MODE translate → mock');

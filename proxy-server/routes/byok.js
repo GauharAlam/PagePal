@@ -3,6 +3,7 @@ import { z } from 'zod';
 import requireAuth from '../middleware/requireAuth.js';
 import { getSupabase } from '../lib/supabase.js';
 import { env } from '../lib/env.js';
+import { encrypt, decrypt } from '../lib/crypto.js';
 
 const router = Router();
 
@@ -31,19 +32,28 @@ router.get('/api/keys', requireAuth, async (req, res) => {
     const supabase = getSupabase();
     const { data, error } = await supabase.from('user_api_keys').select('provider, api_key, created_at').eq('user_id', req.user.id);
     if (error) throw error;
-    const keys = (data||[]).map(r => ({
-      provider: r.provider,
-      masked: r.api_key.slice(0,4) + '…' + r.api_key.slice(-4),
-      created_at: r.created_at,
-    }));
+    const keys = (data||[]).map(r => {
+      // Decrypt key, then mask for display
+      let rawKey;
+      try {
+        rawKey = decrypt(r.api_key);
+      } catch {
+        rawKey = r.api_key; // Legacy unencrypted key
+      }
+      return {
+        provider: r.provider,
+        masked: rawKey.slice(0,4) + '…' + rawKey.slice(-4),
+        created_at: r.created_at,
+      };
+    });
     res.json({ keys });
   } catch (err) {
     console.error('GET keys error', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve keys' });
   }
 });
 
-// POST /api/keys — upsert
+// POST /api/keys — upsert (encrypt before storing)
 router.post('/api/keys', requireAuth, async (req, res) => {
   const parsed = upsertSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
@@ -55,18 +65,20 @@ router.post('/api/keys', requireAuth, async (req, res) => {
       m.set(provider, api_key);
       return res.json({ success: true, provider, demo: true });
     }
+    // Encrypt the API key before storing
+    const encryptedKey = encrypt(api_key);
     const supabase = getSupabase();
     const { error } = await supabase.from('user_api_keys').upsert({
       user_id: req.user.id,
       provider,
-      api_key,
+      api_key: encryptedKey,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,provider' });
     if (error) throw error;
     res.json({ success: true, provider });
   } catch (err) {
     console.error('POST keys error', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to save key' });
   }
 });
 
@@ -85,7 +97,7 @@ router.delete('/api/keys/:provider', requireAuth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('DELETE keys error', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to delete key' });
   }
 });
 
