@@ -326,8 +326,10 @@ export default function App() {
               loading={loading}
               error={error}
               pageContext={pageContext}
+              rawContent={pageContent}
               currentModel={currentModel}
               onRetry={() => summarizePage(true)}
+              onNavigateToChat={() => setActiveTab('chat')}
             />
           </div>
           <div className={activeTab === 'chat' ? 'h-full' : 'hidden h-full'} id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
