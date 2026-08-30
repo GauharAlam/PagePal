@@ -24,21 +24,21 @@ export default function SummaryTab({
   const [asking, setAsking] = useState(false);
   const followupsEndRef = useRef(null);
 
-  // Dynamic AI suggestions derived directly from the analyzed page content
+  // Short, punchy dynamic AI suggestions derived directly from the analyzed page content
   const aiFollowups = data?.followupQuestions && data.followupQuestions.length > 0
     ? data.followupQuestions
     : data?.keyPoints && data.keyPoints.length > 0
     ? [
-        `Explain "${data.keyPoints[0].slice(0, 36)}…" in detail`,
-        data.keyPoints[1] ? `How does "${data.keyPoints[1].slice(0, 36)}…" work?` : 'Give real-world practical examples',
-        'What are the key counterpoints or limitations?',
-        'What are the future implications?',
+        `Explain "${data.keyPoints[0].slice(0, 24)}…"`,
+        'Key complexity & tradeoffs?',
+        'Real-world applications?',
+        'Main counterpoints & limits?',
       ]
     : [
-        'Explain the core thesis in more detail',
-        'What are the main counterpoints or limitations?',
-        'Give real-world practical examples',
-        'What are the future implications?',
+        'Explain core thesis deeper',
+        'Key complexity & tradeoffs?',
+        'Real-world applications?',
+        'Main counterpoints & limits?',
       ];
 
   async function getToken() {
@@ -343,7 +343,7 @@ export default function SummaryTab({
       </div>
 
       {/* ========================================================================= */}
-      {/* 📌 FIXED STICKY BOTTOM SECTION (AI Suggestions + Input Bar)                */}
+      {/* 📌 FIXED STICKY BOTTOM SECTION (Compact AI Suggestions + Input Bar)        */}
       {/* ========================================================================= */}
       <div className="border-t border-border/60 bg-card/85 backdrop-blur-xl p-2.5 space-y-2 shadow-lg shrink-0">
         <div className="flex items-center justify-between">
@@ -362,17 +362,18 @@ export default function SummaryTab({
           )}
         </div>
 
-        {/* 1-Click AI-Generated Content Suggestions */}
-        <div className="flex flex-col gap-1.5 max-h-28 overflow-y-auto pr-1">
-          {aiFollowups.slice(0, 3).map((suggestion, idx) => (
+        {/* 1-Click Compact AI-Generated Content Suggestions */}
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+          {aiFollowups.slice(0, 4).map((suggestion, idx) => (
             <button
               key={idx}
               disabled={asking}
               onClick={() => handleAskFollowup(suggestion)}
-              className="rounded-xl border border-border/70 bg-background/70 px-2.5 py-1.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-foreground flex items-start gap-1.5 shadow-xs"
+              className="whitespace-nowrap shrink-0 rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-left text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-foreground flex items-center gap-1 shadow-xs"
+              title={suggestion}
             >
-              <span className="text-amber-500 shrink-0 mt-0.5">✨</span>
-              <span className="line-clamp-2 leading-tight">{suggestion}</span>
+              <span className="text-amber-500 text-[9px]">✨</span>
+              <span className="max-w-[210px] truncate">{suggestion}</span>
             </button>
           ))}
         </div>

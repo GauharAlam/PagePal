@@ -81,16 +81,16 @@ Analyze the provided content and respond ONLY with valid JSON matching this sche
   "readingTime": "3 min read",
   "language": "English",
   "followupQuestions": [
-    "Specific, high-curiosity question about a core topic or claim in this content?",
-    "Specific question about a mechanism, data point, or evidence mentioned?",
-    "Specific question exploring counter-arguments, alternatives, or future applications?"
+    "Short question under 7 words?",
+    "Short question under 7 words?",
+    "Short question under 7 words?"
   ]
 }
 Rules:
 - sentiment must be one of: "positive", "neutral", "negative".
 - For YouTube videos, include chronological timestamps if transcript details are present, otherwise provide [].
 - keyPoints must contain exactly 5 high-value takeaways.
-- followupQuestions must contain 3-4 specific questions directly relevant to the unique content of this page.
+- followupQuestions must contain 3-4 ultra-short, punchy questions (STRICTLY 4 to 7 words each, never long sentences) directly about key concepts from this content.
 - Output pure JSON only. Do not include markdown code block tags, preambles, or conversational commentary.`;
 
     let raw = '';
