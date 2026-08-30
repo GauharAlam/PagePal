@@ -23,7 +23,7 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
   const pageBadge = (pageContext?.pageType || 'page').toUpperCase();
 
   return (
-    <header className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2.5">
+    <header className="mx-2 mt-2 mb-1 flex items-center justify-between gap-2 rounded-2xl border border-border/70 bg-card/65 px-3 py-2 shadow-xs backdrop-blur-xl transition-all supports-[backdrop-filter]:bg-card/50">
       {/* Left branding + Page Badge */}
       <div className="flex items-center gap-2 min-w-0">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-primary text-xs font-black text-black shadow-hard-sm" aria-hidden>
@@ -49,7 +49,7 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
         <button
           onClick={onThemeToggle}
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-xs transition-colors hover:bg-accent"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card/80 text-xs transition-colors hover:bg-accent"
         >
           <span aria-hidden>{theme === 'dark' ? '☀' : '◐'}</span>
         </button>
@@ -58,7 +58,7 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
           <div className="relative">
             <button
               onClick={() => setShowMenu((v) => !v)}
-              className="flex h-7 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-semibold shadow-xs hover:bg-accent"
+              className="flex h-7 items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 text-xs font-semibold shadow-xs hover:bg-accent"
               aria-expanded={showMenu}
             >
               <span className="max-w-[65px] truncate text-[11px]">

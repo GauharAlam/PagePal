@@ -29,7 +29,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className={`sticky top-0 z-50 transition-all duration-300 border-b-2 border-black ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-sm' : 'bg-white'}`}>
+    <header className={`sticky top-3 z-50 mx-3 sm:mx-6 lg:mx-auto max-w-6xl transition-all duration-300 rounded-2xl border-2 border-black ${scrolled ? 'bg-white/80 backdrop-blur-xl shadow-hard' : 'bg-white/90 backdrop-blur-md shadow-hard-sm'}`}>
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-2.5 group">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-black bg-[#FDE047] text-base font-black shadow-hard-sm transition-transform group-hover:rotate-6">

@@ -8,8 +8,8 @@ const TABS = [
 
 export default function TabBar({ activeTab, onChange }) {
   return (
-    <div className="border-b border-border/40 bg-muted/20 px-2 py-1.5">
-      <div role="tablist" aria-label="Sections" className="flex items-center gap-1 rounded-xl bg-muted/50 p-1">
+    <div className="border-b border-border/30 px-2 pb-1.5 pt-0.5">
+      <div role="tablist" aria-label="Sections" className="flex items-center gap-1 rounded-xl bg-muted/40 p-1">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -22,8 +22,8 @@ export default function TabBar({ activeTab, onChange }) {
               onClick={() => onChange(tab.id)}
               className={`flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition-all ${
                 isActive
-                  ? 'bg-card text-foreground shadow-sm border border-border/40'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-card/40'
+                  ? 'bg-card text-foreground shadow-xs border border-border/50'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-card/30'
               }`}
             >
               <span className="text-[10px]">{tab.icon}</span>
