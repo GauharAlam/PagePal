@@ -1,12 +1,22 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+import { getSupabase } from '../lib/supabase.js';
+import { env } from '../lib/env.js';
 
 export default async function requireAuth(req, res, next) {
   try {
+    // DEMO_MODE: bypass Supabase auth, allow any token (or no token)
+    if (env.DEMO_MODE) {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.replace('Bearer ', '');
+      // In demo, accept demo token or missing token with mock user
+      req.user = { id: 'demo-user-id', email: 'demo@pagepal.ai', user_metadata: {} };
+      // Preserve plan header if provided for testing pro? default free
+      const demoPlan = req.headers['x-demo-plan'] || 'free';
+      req.userPlan = { plan: demoPlan, daily_summaries: 0, daily_chats: 0, last_reset_date: new Date().toISOString().split('T')[0], stripe_customer_id: null };
+      req.isDemo = true;
+      return next();
+    }
+
+    const supabase = getSupabase();
     const authHeader = req.headers.authorization;
     const token = authHeader?.replace('Bearer ', '');
 

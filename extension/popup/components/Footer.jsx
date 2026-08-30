@@ -1,34 +1,37 @@
-const QUICK_ACTIONS = [
-  { icon: '📝', label: 'Summarize', action: 'summarize' },
-  { icon: '❓', label: 'Q&A', action: 'qa' },
-  { icon: '🌐', label: 'Translate', action: 'translate' },
-  { icon: '📤', label: 'Export', action: 'export' },
+const ACTIONS = [
+  { label: 'Summarize', action: 'summarize' },
+  { label: 'Ask', action: 'qa' },
+  { label: 'Keys', action: 'keys' },
+  { label: 'Export', action: 'export' },
 ];
 
-export default function Footer({ onQuickAction }) {
-  return (
-    <footer className="border-t border-dark-500/30 px-3 py-2">
-      {/* Quick Actions */}
-      <div className="flex justify-center gap-1 mb-2">
-        {QUICK_ACTIONS.map(action => (
-          <button
-            key={action.action}
-            onClick={() => onQuickAction(action.action)}
-            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-gray-500 hover:text-purple-400 hover:bg-dark-700/50 transition-all"
-            title={action.label}
-          >
-            <span className="text-sm">{action.icon}</span>
-            <span className="text-[9px] font-medium">{action.label}</span>
-          </button>
-        ))}
-      </div>
+const ACTION_ICONS = { summarize: '◧', qa: '◨', keys: '⚿', export: '⬆' };
 
-      {/* Branding */}
-      <div className="flex items-center justify-center gap-1.5">
-        <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse-soft" />
-        <p className="text-[9px] text-gray-600">
-          Powered by <span className="gradient-text font-semibold">PagePal AI</span> · v1.0.0
-        </p>
+export default function Footer({ onQuickAction, activeTab }) {
+  return (
+    <footer className="border-t border-border bg-card px-2 py-2">
+      <div className="flex gap-1">
+        {ACTIONS.map((a) => {
+          const isActive = (a.action === 'summarize' && activeTab === 'summary') || (a.action === 'qa' && activeTab === 'chat') || (a.action === 'keys' && activeTab === 'keys') || (a.action === 'export' && activeTab === 'tools');
+          return (
+            <button
+              key={a.action}
+              onClick={() => onQuickAction(a.action)}
+              className={`flex flex-1 items-center justify-center gap-1 rounded-full border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                isActive ? 'border-foreground bg-foreground text-background' : 'border-transparent text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <span aria-hidden className="text-[10px]">{ACTION_ICONS[a.action]}</span>
+              {a.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex justify-center gap-2 border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
+        <span>PagePal v1.0.0</span>
+        <span className="h-3 w-px bg-border" aria-hidden />
+        <span>5 models • Pro or BYOK</span>
       </div>
     </footer>
   );

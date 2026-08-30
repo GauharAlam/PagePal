@@ -1,100 +1,35 @@
-import React from 'react'
-import { motion, useInView } from 'framer-motion'
-import { useRef } from 'react'
-import { STEPS } from '../utils/constants'
+import React from 'react';
 
-function StepCard({ number, title, description, icon, index, isLast }) {
-  const ref = useRef(null)
-  const inView = useInView(ref, { once: true, margin: '-50px' })
-
-  return (
-    <div ref={ref} className="relative flex flex-col items-center text-center">
-      {/* Connector line */}
-      {!isLast && (
-        <div className="hidden lg:block absolute top-10 left-[calc(50%+3rem)] right-[calc(-50%+3rem)] h-px">
-          <motion.div
-            initial={{ scaleX: 0 }}
-            animate={inView ? { scaleX: 1 } : {}}
-            transition={{ duration: 0.6, delay: index * 0.15 + 0.3, ease: 'easeInOut' }}
-            style={{ transformOrigin: 'left' }}
-            className="h-full bg-gradient-to-r from-brand-500/40 to-transparent"
-          />
-          <div className="absolute inset-0 border-t border-dashed border-white/5" />
-        </div>
-      )}
-
-      <motion.div
-        initial={{ opacity: 0, y: 28 }}
-        animate={inView ? { opacity: 1, y: 0 } : {}}
-        transition={{ duration: 0.55, delay: index * 0.12, ease: [0.22, 1, 0.36, 1] }}
-        className="flex flex-col items-center gap-4 w-full"
-      >
-        {/* Number + icon bubble */}
-        <div className="relative">
-          <div className="w-20 h-20 rounded-2xl glass border border-white/10 flex items-center justify-center text-3xl shadow-xl shadow-black/20 group-hover:border-brand-500/30 transition-colors">
-            {icon}
-          </div>
-          <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-brand-500 border-2 border-zinc-950 flex items-center justify-center">
-            <span className="text-[9px] font-extrabold text-white">{number}</span>
-          </div>
-        </div>
-
-        {/* Text */}
-        <div className="px-2">
-          <h3 className="text-base font-semibold text-zinc-100 mb-2">{title}</h3>
-          <p className="text-sm text-zinc-400 leading-relaxed">{description}</p>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
+const STEPS = [
+  { n: '01', title: 'Install from Store', desc: 'Add PagePal in one click. No account.' },
+  { n: '02', title: 'Pin & press shortcut', desc: 'Pin and press Ctrl+Shift+P on any page.' },
+  { n: '03', title: 'Run Muse-Spark 1.2', desc: 'Summarize, chat, prompt without leaving the tab.' },
+];
 
 export default function HowItWorks() {
-  const headRef = useRef(null)
-  const headInView = useInView(headRef, { once: true, margin: '-60px' })
-
   return (
-    <section id="how-it-works" className="relative py-24 overflow-hidden">
-      {/* BG */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-500/20 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand-500/20 to-transparent" />
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-brand-500/[0.04] rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section header */}
-        <motion.div
-          ref={headRef}
-          initial={{ opacity: 0, y: 24 }}
-          animate={headInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="text-center mb-20"
-        >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-emerald-500/20 text-sm text-emerald-400 font-medium mb-4">
-            🚀 How It Works
-          </div>
-          <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
-            Up and running in{' '}
-            <span className="text-gradient">60 seconds</span>
-          </h2>
-          <p className="text-lg text-zinc-400 max-w-xl mx-auto">
-            No accounts. No API keys (unless you want your own). Just install and go.
-          </p>
-        </motion.div>
-
-        {/* Steps */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
-          {STEPS.map((step, i) => (
-            <StepCard
-              key={step.number}
-              {...step}
-              index={i}
-              isLast={i === STEPS.length - 1}
-            />
+    <section id="how-it-works" className="scroll-mt-14 bg-[#FFFDf5] py-12 sm:py-16">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">How it works</h2>
+          <p className="mt-2 text-sm text-zinc-600">Three steps, under 60 seconds. No account needed to start.</p>
+        </div>
+        <div className="mt-10 grid gap-4 sm:grid-cols-3">
+          {STEPS.map((s) => (
+            <div key={s.n} className="group rounded-2xl border-2 border-black bg-white p-6 shadow-hard transition-transform hover:translate-y-px hover:shadow-hard-sm">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border-2 border-black bg-[#FDE047] text-xs font-extrabold shadow-hard-sm">{s.n}</span>
+              <h3 className="mt-4 text-sm font-bold">{s.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">{s.desc}</p>
+            </div>
           ))}
+        </div>
+        <p className="mt-8 text-center text-xs font-medium text-zinc-600">Works on Chrome 114+ • Minimal permissions • MIT • 5 models via Smart Router</p>
+        <div className="mt-6 flex justify-center">
+          <a href="https://chrome.google.com/webstore/detail/pagepal-ai/placeholder" target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center rounded-full border-2 border-black bg-[#FDE047] px-6 text-sm font-bold shadow-hard hover:translate-y-px hover:shadow-hard-sm transition-all">
+            Add to Chrome — Free
+          </a>
         </div>
       </div>
     </section>
-  )
+  );
 }

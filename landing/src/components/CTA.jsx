@@ -1,108 +1,31 @@
-import React from 'react'
-import { motion, useInView } from 'framer-motion'
-import { useRef } from 'react'
-import { Zap, ArrowRight, Chrome } from 'lucide-react'
-import { CHROME_STORE_URL } from '../utils/constants'
+import React from 'react';
+import { CHROME_STORE_URL } from '../utils/constants';
+import { Button } from './ui/button';
 
 export default function CTA() {
-  const ref = useRef(null)
-  const inView = useInView(ref, { once: true, margin: '-60px' })
-
   return (
-    <section ref={ref} className="relative py-24 overflow-hidden">
-      {/* Ambient background */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-brand-500/10 rounded-full blur-3xl" />
-        <div className="absolute left-1/3 top-1/3 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl" />
-        <div className="absolute right-1/3 bottom-1/3 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 32, scale: 0.97 }}
-          animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="gradient-border rounded-3xl overflow-hidden glow-brand"
-        >
-          {/* Top strip gradient */}
-          <div className="h-1 bg-gradient-to-r from-brand-500 via-purple-500 to-cyan-400" />
-
-          <div className="px-8 py-16 sm:px-16 text-center">
-            {/* Icon */}
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={inView ? { scale: 1, opacity: 1 } : {}}
-              transition={{ duration: 0.5, delay: 0.15, type: 'spring', stiffness: 260, damping: 20 }}
-              className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-4xl shadow-2xl shadow-brand-500/40"
-            >
-              🧠
-            </motion.div>
-
-            <motion.h2
-              initial={{ opacity: 0, y: 16 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4"
-            >
-              Start reading smarter{' '}
-              <span className="text-gradient">today.</span>
-            </motion.h2>
-
-            <motion.p
-              initial={{ opacity: 0, y: 12 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="text-lg text-zinc-400 max-w-xl mx-auto mb-10"
-            >
-              Join 10,000+ users who save hours every week by letting PagePal do the reading for them. Free to install. No credit card required.
-            </motion.p>
-
-            {/* CTA buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.36, ease: [0.22, 1, 0.36, 1] }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
-            >
-              <a
-                href={CHROME_STORE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-center gap-3 px-8 py-4 rounded-2xl bg-brand-500 hover:bg-brand-400 text-white font-bold text-lg transition-all duration-200 shadow-2xl shadow-brand-500/40 hover:shadow-brand-500/60 hover:-translate-y-0.5"
-              >
-                <Zap size={20} className="fill-white" />
-                Add to Chrome — It's Free
-                <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
-              </a>
-
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
-                <Chrome size={16} className="text-zinc-600" />
-                Available for Chrome &amp; Chromium browsers
-              </div>
-            </motion.div>
-
-            {/* Trust badges */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={inView ? { opacity: 1 } : {}}
-              transition={{ duration: 0.6, delay: 0.48 }}
-              className="flex flex-wrap items-center justify-center gap-6 mt-10 text-xs text-zinc-600"
-            >
-              {[
-                { icon: '🔒', label: 'No account required' },
-                { icon: '✨', label: 'Free tier included' },
-                { icon: '⚡', label: '< 3s summaries' },
-                { icon: '🌐', label: 'Works on any page' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-1.5">
-                  <span>{item.icon}</span>
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </motion.div>
+    <section className="bg-[#FDE047] py-12 sm:py-16">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="rounded-2xl border-2 border-black bg-white p-8 text-center shadow-hard sm:p-10">
+          <h2 className="font-heading text-2xl font-extrabold tracking-tight sm:text-3xl">Start reading smarter today</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-600">
+            Free 5 summaries/day. Pro $9/mo (keys included) or bring your own API key. Works on any page in 60 seconds.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <a href={CHROME_STORE_URL} target="_blank" rel="noopener noreferrer">
+              <Button variant="default" size="lg" className="rounded-full border-2 border-black bg-[#FDE047] text-black hover:bg-[#FDE047]/90 shadow-hard-sm">Add to Chrome — Free</Button>
+            </a>
+            <span className="text-xs font-medium text-zinc-500">No card for BYOK • Cancel anytime • MIT</span>
           </div>
-        </motion.div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3 border-t-2 border-black/10 pt-6 text-xs font-medium text-zinc-600">
+            <span>✓ Free tier</span>
+            <span className="h-3 w-px bg-black/20" />
+            <span>✓ BYOK supported</span>
+            <span className="h-3 w-px bg-black/20" />
+            <span>✓ 5 models • Smart Router</span>
+          </div>
+        </div>
       </div>
     </section>
-  )
+  );
 }

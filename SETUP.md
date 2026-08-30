@@ -405,12 +405,16 @@ In the top-right corner of the Extensions page, toggle on **"Developer mode"**.
 
 You'll see three new buttons appear: `Load unpacked`, `Pack extension`, `Update`.
 
-### 6C. Load the extension
+### 6C. Build & Load the extension
 
-1. Click **"Load unpacked"**
-2. A file picker will open
-3. Navigate to your project folder
-4. Select the **`extension`** folder (the one containing `manifest.json`)
+1. Ensure the extension is built by running:
+   ```bash
+   cd extension
+   npm run build
+   ```
+2. In Chrome, click **"Load unpacked"**
+3. A file picker will open
+4. Navigate to your project folder and select the **`extension/dist`** folder (the built output containing `manifest.json`)
 5. Click **"Select Folder"** (Windows) or **"Open"** (macOS)
 
 ### 6D. Confirm it loaded
@@ -840,7 +844,7 @@ Chrome Extension
 □ Chrome 114+ installed
 □ chrome://extensions opened
 □ Developer mode enabled (top-right toggle)
-□ "Load unpacked" → selected Ai_Tools/extension/ folder
+□ "Load unpacked" → selected Ai_Tools/extension/dist/ folder
 □ PagePal AI appears in extensions list with no errors
 □ Extension icon pinned to Chrome toolbar
 □ Clicking icon opens side panel on a webpage

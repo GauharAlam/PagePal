@@ -3,7 +3,7 @@
   "name": "PagePal AI",
   "version": "1.0.0",
   "description": "AI co-pilot for any webpage — summarize, chat, translate, and more.",
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus", "identity"],
   "host_permissions": ["https://*.youtube.com/*", "https://*/*", "http://*/*"],
   "background": {
     "service_worker": "background/service_worker.js",

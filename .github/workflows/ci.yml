@@ -25,11 +25,11 @@ jobs:
       - name: Build project
         run: npm run build
 
-  check-server:
+  check-proxy:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./server
+        working-directory: ./proxy-server
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -37,9 +37,11 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: proxy-server/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Health check (dry run)
+        run: node --check index.js
       - name: Run lint (if exists)
         run: |
           if npm run | grep -q "lint"; then
@@ -47,3 +49,23 @@ jobs:
           else
             echo "No lint script found, skipping."
           fi
+
+  build-extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./extension
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: extension/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build extension
+        run: npm run build
+      - name: Verify manifest
+        run: cat dist/manifest.json

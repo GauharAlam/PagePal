@@ -1,29 +1,31 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
 import requireAuth from '../middleware/requireAuth.js';
+import { getSupabase, getAnthropic } from '../lib/supabase.js';
+import { hasOpenRouter, openRouterCreate } from '../lib/openrouter.js';
+import { validate, chatSchema, quizSchema } from '../lib/validate.js';
+import { env } from '../lib/env.js';
+import { mockChat, mockQuiz } from '../lib/demo.js';
 
 const router = Router();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-
 const FREE_CHAT_LIMIT = 10;
 
 // Chat endpoint
-router.post('/api/chat', requireAuth, async (req, res) => {
+router.post('/api/chat', requireAuth, validate(chatSchema), async (req, res) => {
   try {
     const { messages, context, pageType, title } = req.body;
-
-    if (!messages?.length) {
-      return res.status(400).json({ error: 'Messages are required' });
+    const useOpenRouter = hasOpenRouter();
+    if (!useOpenRouter && env.DEMO_MODE) {
+      console.log('📦 DEMO_MODE chat → mock');
+      return res.json({ reply: mockChat({ messages, title }) });
     }
 
-    // Check plan limits
-    if (req.userPlan.plan === 'free' && req.userPlan.daily_chats >= FREE_CHAT_LIMIT) {
+    let supabase = null;
+    try { supabase = getSupabase(); } catch {}
+    if (supabase && req.userPlan?.plan === 'free' && req.userPlan.daily_chats >= FREE_CHAT_LIMIT) {
       return res.status(429).json({
         error: 'Daily chat limit reached',
         message: `Free plan allows ${FREE_CHAT_LIMIT} chat messages per day. Upgrade to Pro for unlimited access.`,
-        upgrade: true
+        upgrade: true,
       });
     }
 
@@ -41,63 +43,95 @@ Rules:
 - Never make up information that isn't in the content
 - Use markdown formatting when appropriate for readability`;
 
-    const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
-      system,
-      messages: messages.slice(-10) // Keep last 10 messages for context window
-    });
+    let replyText = '';
+    if (useOpenRouter) {
+      console.log(`🤖 OpenRouter GLM chat → ${env.OPENROUTER_MODEL}`);
+      const msg = await openRouterCreate({ system, messages: messages.slice(-10), max_tokens: 1000 });
+      replyText = msg.content[0].text;
+    } else {
+      const anthropic = await getAnthropic();
+      const msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system,
+        messages: messages.slice(-10),
+      });
+      replyText = msg.content[0].text;
+    }
 
-    // Increment chat counter
-    await supabase
-      .from('user_plans')
-      .update({ daily_chats: (req.userPlan.daily_chats || 0) + 1 })
-      .eq('user_id', req.user.id);
+    if (supabase) {
+      try {
+        const { error: rpcErr } = await supabase.rpc('increment_usage', { p_user_id: req.user.id, p_field: 'daily_chats' });
+        if (rpcErr) throw rpcErr;
+      } catch {
+        try { await supabase.from('user_plans').update({ daily_chats: (req.userPlan.daily_chats || 0) + 1 }).eq('user_id', req.user.id); } catch {}
+      }
+    }
 
-    res.json({ reply: msg.content[0].text });
+    res.json({ reply: replyText });
   } catch (err) {
     console.error('Chat error:', err);
-    res.status(500).json({ error: err.message || 'Chat failed' });
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({ error: isProd ? 'Chat failed' : err.message });
   }
 });
 
-// Quiz generator endpoint
-router.post('/api/quiz', requireAuth, async (req, res) => {
+// Quiz generator — Pro only
+router.post('/api/quiz', requireAuth, validate(quizSchema), async (req, res) => {
   try {
     const { content, title } = req.body;
-
-    if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
+    const useOpenRouter = hasOpenRouter();
+    if (!useOpenRouter && env.DEMO_MODE) {
+      console.log('📦 DEMO_MODE quiz → mock');
+      return res.json(mockQuiz());
     }
 
-    // Quiz is Pro-only
-    if (req.userPlan.plan === 'free') {
-      return res.status(429).json({
+    let supabase = null;
+    try { supabase = getSupabase(); } catch {}
+    if (supabase && req.userPlan?.plan === 'free') {
+      return res.status(403).json({
         error: 'Quiz is a Pro feature',
         message: 'Upgrade to Pro to generate quizzes from any content.',
-        upgrade: true
+        upgrade: true,
       });
     }
 
-    const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      messages: [{
-        role: 'user',
-        content: `Generate 5 multiple choice questions based on this content titled "${title}". 
+    // Allow demo free to try quiz with OpenRouter
+    const prompt = `Generate 5 multiple choice questions based on this content titled "${title}".
 Each question should test understanding of key concepts.
 Respond ONLY with valid JSON in this exact format:
 {"questions":[{"q":"question text","options":["A) option","B) option","C) option","D) option"],"answer":"A) option","explanation":"brief explanation"}]}
 
-Content: ${content.slice(0, 8000)}`
-      }]
-    });
+Content: ${content.slice(0, 8000)}`;
 
-    const raw = msg.content[0].text.replace(/```json\n?|```/g, '').trim();
-    res.json(JSON.parse(raw));
+    let raw = '';
+    if (useOpenRouter) {
+      console.log(`🤖 OpenRouter GLM quiz → ${env.OPENROUTER_MODEL}`);
+      const msg = await openRouterCreate({ messages: [{ role: 'user', content: prompt }], max_tokens: 1500 });
+      raw = msg.content[0].text;
+    } else {
+      const anthropic = await getAnthropic();
+      const msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      raw = msg.content[0].text;
+    }
+
+    const cleaned = raw.replace(/```json\n?|```/g, '').trim();
+    const first = cleaned.indexOf('{');
+    const last = cleaned.lastIndexOf('}');
+    const clean = first !== -1 ? cleaned.slice(first, last + 1) : cleaned;
+    try {
+      res.json(JSON.parse(clean));
+    } catch {
+      return res.status(502).json({ error: 'Quiz generation returned invalid format' });
+    }
   } catch (err) {
     console.error('Quiz error:', err);
-    res.status(500).json({ error: err.message || 'Quiz generation failed' });
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({ error: isProd ? 'Quiz generation failed' : err.message });
   }
 });
 

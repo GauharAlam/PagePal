@@ -1,266 +1,160 @@
-import React from "react";
-import { motion } from "framer-motion";
-import { Zap, ArrowRight, Star } from "lucide-react";
-import { CHROME_STORE_URL } from "../utils/constants";
+import React, { useState } from 'react';
+import { Search, Chrome, Sparkles, FileText, Youtube, MessageCircle, Languages, ClipboardCheck } from 'lucide-react';
+import { CHROME_STORE_URL } from '../utils/constants';
 
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 30 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] },
-});
+const FILTERS = ['All', 'Summarize', 'YouTube', 'Chat', 'Translate', 'Quiz'];
+
+const DEMOS = [
+  { id: 'sum', title: 'Article Summary', desc: 'Turn any long article into 3 bullets + key insights in <2s.', tag: 'Summarize', icon: FileText, accent: 'bg-[#FDE047]', meta: '12s → 3 bullets' },
+  { id: 'yt', title: 'YouTube Chapters', desc: 'Auto timestamps + key ideas from any video. No scrubbing.', tag: 'YouTube', icon: Youtube, accent: 'bg-white', meta: '2h video → 8 chapters' },
+  { id: 'chat', title: 'Chat with Page', desc: 'Ask anything — Claude answers with citations from the content.', tag: 'Chat', icon: MessageCircle, accent: 'bg-[#FFF8D6]', meta: 'Cited answers' },
+  { id: 'trans', title: 'Translate', desc: 'Summaries to 50+ languages in one click. Pro feature.', tag: 'Translate', icon: Languages, accent: 'bg-white', meta: '50+ languages' },
+  { id: 'quiz', title: 'Quiz Generator', desc: '5 MCQs per page to test understanding. Auto-graded.', tag: 'Quiz', icon: ClipboardCheck, accent: 'bg-[#FDE047]', meta: '5 Qs • instant' },
+  { id: 'keys', title: 'BYOK or Pro', desc: 'Use Pro keys included or bring your own. Your quota.', tag: 'Summarize', icon: Sparkles, accent: 'bg-zinc-100', meta: 'Pro $9 • BYOK $0' },
+];
 
 export default function Hero() {
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState('All');
+
+  const filtered = DEMOS.filter(d => {
+    const matchesSearch = !query || d.title.toLowerCase().includes(query.toLowerCase()) || d.desc.toLowerCase().includes(query.toLowerCase());
+    const matchesFilter = active === 'All' || d.tag === active;
+    return matchesSearch && matchesFilter;
+  });
+
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
-      {/* Background glows */}
-      <div className="absolute inset-0 bg-hero-glow pointer-events-none" />
-      <div className="dot-grid absolute inset-0 opacity-50 pointer-events-none" />
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 left-1/4 w-[300px] h-[300px] bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 right-1/4 w-[300px] h-[300px] bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24 grid lg:grid-cols-2 gap-16 items-center">
-        {/* ── Left: Copy ── */}
-        <div className="flex flex-col items-start gap-6">
-          {/* Badge */}
-          <motion.div {...fadeUp(0.1)}>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass border border-brand-500/30 text-sm text-brand-300 font-medium w-fit">
-              <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse-slow" />
-              AI-Powered Chrome Extension
-            </div>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            {...fadeUp(0.2)}
-            className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight"
-          >
-            Summarize <span className="text-gradient">Anything.</span>
-            <br />
-            <span className="text-zinc-300">Instantly.</span>
-          </motion.h1>
-
-          {/* Subheading */}
-          <motion.p
-            {...fadeUp(0.3)}
-            className="text-lg text-zinc-400 leading-relaxed max-w-lg"
-          >
-            PagePal is a smart Chrome extension that uses{" "}
-            <span className="text-zinc-200 font-medium">
-              Gemini, GPT-4, DeepSeek &amp; Grok
-            </span>{" "}
-            to summarize any webpage, YouTube video, or article in seconds —
-            with zero effort.
-          </motion.p>
-
-          {/* CTA Row */}
-          <motion.div
-            {...fadeUp(0.4)}
-            className="flex flex-wrap items-center gap-3 mt-2"
-          >
-            <a
-              href={CHROME_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-brand-500 hover:bg-brand-400 text-white font-semibold text-base transition-all duration-200 shadow-xl shadow-brand-500/30 hover:shadow-brand-500/50 hover:-translate-y-0.5"
-            >
-              <Zap size={16} className="fill-white" />
-              Add to Chrome — Free
-              <ArrowRight
-                size={16}
-                className="transition-transform group-hover:translate-x-1"
-              />
+    <section id="hero" className="bg-grid bg-[#FFFDf5] py-12 sm:py-16 scroll-mt-14">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-bold shadow-hard-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
+            Muse-Spark 1.2 • Chrome Extension • MIT
+          </div>
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl leading-[1.1]">
+            Summarize Anything. <span className="inline-block rounded-lg bg-[#FDE047] px-3 py-1 shadow-hard-sm">Instantly.</span>
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-zinc-600 sm:text-base">
+            AI co-pilot for any webpage — articles, YouTube, PDFs. Summarize, chat, quiz & translate with <span className="font-semibold text-black">Claude Sonnet 4</span> without leaving the tab.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <a href={CHROME_STORE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center gap-2 rounded-full border-2 border-black bg-[#FDE047] px-6 text-sm font-bold shadow-hard hover:translate-y-px hover:shadow-hard-sm transition-all">
+              <Chrome size={16} aria-hidden /> Add to Chrome — Free
             </a>
-            <a
-              href="#how-it-works"
-              onClick={(e) => {
-                e.preventDefault();
-                document
-                  .querySelector("#how-it-works")
-                  ?.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl glass hover:bg-white/10 text-zinc-200 font-semibold text-base transition-all duration-200"
-            >
-              See How It Works
+            <a href="#how-it-works" onClick={(e) => { e.preventDefault(); document.querySelector('#how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }} className="inline-flex h-11 items-center justify-center gap-2 rounded-full border-2 border-black bg-white px-6 text-sm font-bold shadow-hard-sm hover:bg-zinc-50 hover:translate-y-px transition-all">
+              See how it works
             </a>
-          </motion.div>
-
-          {/* Social proof */}
-          <motion.div {...fadeUp(0.5)} className="flex items-center gap-3 mt-1">
-            <div className="flex -space-x-2">
-              {[
-                "bg-violet-500",
-                "bg-pink-500",
-                "bg-cyan-500",
-                "bg-amber-500",
-                "bg-emerald-500",
-              ].map((c, i) => (
-                <div
-                  key={i}
-                  className={`w-7 h-7 rounded-full ${c} border-2 border-zinc-950 flex items-center justify-center text-[10px] font-bold text-white`}
-                >
-                  {String.fromCharCode(65 + i)}
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="flex">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={12}
-                    className="fill-amber-400 text-amber-400"
-                  />
-                ))}
-              </div>
-              <span className="text-sm text-zinc-400">
-                <span className="text-zinc-200 font-semibold">10,000+</span>{" "}
-                users love PagePal
-              </span>
-            </div>
-          </motion.div>
+          </div>
+          <p className="mt-3 text-xs font-medium text-zinc-500">Free 5/day • Pro $9/mo unlimited • BYOK supported • No tracking</p>
         </div>
 
-        {/* ── Right: Extension UI Mockup ── */}
-        <motion.div
-          initial={{ opacity: 0, x: 40, scale: 0.95 }}
-          animate={{ opacity: 1, x: 0, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          className="relative flex justify-center lg:justify-end"
-        >
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-brand-500/20 via-purple-500/10 to-cyan-500/20 blur-2xl scale-110 pointer-events-none" />
-
-          <div className="relative w-full max-w-sm animate-float">
-            <div className="gradient-border rounded-2xl overflow-hidden shadow-2xl glow-brand">
-              {/* Panel header */}
-              <div className="px-4 py-3 bg-zinc-900/90 border-b border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🧠</span>
-                  <span className="text-sm font-semibold text-zinc-200">
-                    PagePal AI
-                  </span>
-                </div>
-                <div className="flex gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-600" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-600" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-600" />
+        {/* Browser mock */}
+        <div className="mx-auto mt-10 max-w-5xl">
+          <div className="relative overflow-hidden rounded-2xl border-2 border-black bg-white shadow-hard">
+            <div className="flex items-center gap-1.5 border-b-2 border-black bg-zinc-50 px-4 py-2">
+              <span className="h-3 w-3 rounded-full border border-black bg-red-400" />
+              <span className="h-3 w-3 rounded-full border border-black bg-yellow-400" />
+              <span className="h-3 w-3 rounded-full border border-black bg-green-400" />
+              <span className="ml-3 hidden flex-1 truncate rounded-full border border-black bg-white px-3 py-1 text-xs text-zinc-500 sm:block">https://example.com/article — PagePal summarizing…</span>
+              <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-black bg-[#FDE047] px-2 py-1 text-xs font-bold"><Sparkles size={12} /> PagePal</span>
+            </div>
+            <div className="grid gap-0 sm:grid-cols-[1.2fr_0.8fr]">
+              <div className="p-4 sm:p-6">
+                <div className="text-xs font-bold uppercase tracking-widest text-zinc-500">Summary • 12s</div>
+                <p className="mt-2 text-sm leading-6 text-zinc-700">PagePal extracts the page, sends it to Claude Sonnet 4, and returns a concise summary with key points, sentiment, and reading time — all inside the 380×600 popup.</p>
+                <div className="mt-4 flex flex-col gap-2">
+                  <div className="flex gap-2 rounded-xl border-2 border-black bg-[#FFFDf5] p-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-black bg-white text-xs font-bold">1</span>
+                    <span className="text-xs leading-5">Grounded in page content — citations, not hallucinations.</span>
+                  </div>
+                  <div className="flex gap-2 rounded-xl border-2 border-black bg-white p-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-black bg-[#FDE047] text-xs font-bold">2</span>
+                    <span className="text-xs leading-5">YouTube → chapters + timestamps; Articles → key points + sentiment.</span>
+                  </div>
                 </div>
               </div>
-
-              {/* Panel body */}
-              <div className="p-4 bg-zinc-900/80 space-y-4">
-                {/* Page pill */}
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800/60 border border-white/5">
-                  <span className="text-sm">🌐</span>
-                  <span className="text-xs text-zinc-400 truncate">
-                    techcrunch.com/ai-news-2024
-                  </span>
-                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium shrink-0">
-                    Article
-                  </span>
-                </div>
-
-                {/* Quick actions */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: "Summarize", icon: "⚡", active: true },
-                    { label: "Key Points", icon: "🎯", active: false },
-                    { label: "Explain", icon: "💡", active: false },
-                  ].map((btn) => (
-                    <button
-                      key={btn.label}
-                      className={`flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                        btn.active
-                          ? "bg-brand-500/20 border border-brand-500/40 text-brand-300"
-                          : "bg-zinc-800/50 border border-white/5 text-zinc-500"
-                      }`}
-                    >
-                      <span>{btn.icon}</span>
-                      {btn.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* AI model badge */}
-                <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                  <div className="flex items-center gap-2">
-                    <span className="text-blue-400 text-sm font-bold">✦</span>
-                    <span className="text-xs text-blue-300 font-medium">
-                      Using Gemini Flash
-                    </span>
+              <div className="border-t-2 border-black bg-[#FFFDf5] p-4 sm:border-l-2 sm:border-t-0 sm:p-6">
+                <div className="rounded-xl border-2 border-black bg-white p-3 shadow-hard-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold">PagePal Popup</span>
+                    <span className="rounded-full bg-black px-2 py-0.5 text-xs font-bold text-white">380×600</span>
                   </div>
-                  <span className="text-[10px] text-zinc-500">
-                    auto-selected
-                  </span>
-                </div>
-
-                {/* Summary result */}
-                <div className="rounded-xl bg-zinc-800/50 border border-white/5 p-3 space-y-2">
-                  <div className="flex items-center gap-1.5 mb-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
-                    <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
-                      Summary
-                    </span>
+                  <div className="mt-3 space-y-2">
+                    <div className="h-2 w-full rounded bg-zinc-100" />
+                    <div className="h-2 w-5/6 rounded bg-zinc-100" />
+                    <div className="h-2 w-4/6 rounded bg-zinc-100" />
                   </div>
-                  {[
-                    { w: "w-full" },
-                    { w: "w-11/12" },
-                    { w: "w-4/5" },
-                    { w: "w-3/4" },
-                  ].map((line, i) => (
-                    <div
-                      key={i}
-                      className={`${line.w} h-2 rounded-full bg-zinc-700`}
-                    />
-                  ))}
-                  <div className="pt-2 space-y-2">
-                    {[
-                      { dot: "bg-brand-400", w: "w-5/6" },
-                      { dot: "bg-cyan-400", w: "w-4/5" },
-                      { dot: "bg-purple-400", w: "w-11/12" },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <span
-                          className={`w-1 h-1 rounded-full ${item.dot} shrink-0`}
-                        />
-                        <div
-                          className={`${item.w} h-2 rounded-full bg-zinc-700`}
-                        />
-                      </div>
-                    ))}
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <span className="rounded-lg border border-black bg-[#FDE047] px-2 py-1 text-center text-xs font-bold">Summary</span>
+                    <span className="rounded-lg border border-black bg-white px-2 py-1 text-center text-xs font-bold">Chat</span>
+                    <span className="rounded-lg border border-black bg-white px-2 py-1 text-center text-xs font-bold">Tools</span>
                   </div>
                 </div>
-
-                {/* Footer stats */}
-                <div className="flex items-center justify-between text-[10px] text-zinc-600">
-                  <span>2.1s response</span>
-                  <span>~320 tokens</span>
-                  <span className="text-emerald-500">Saved to history</span>
-                </div>
+                <p className="mt-3 text-center text-xs text-zinc-500">Live popup • No new tab needed</p>
               </div>
             </div>
           </div>
-        </motion.div>
-      </div>
 
-      {/* Scroll indicator */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-      >
-        <span className="text-xs text-zinc-600 tracking-widest uppercase">
-          Scroll
-        </span>
-        <motion.div
-          animate={{ y: [0, 6, 0] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-          className="w-5 h-8 rounded-full border border-zinc-700 flex items-start justify-center pt-1.5"
-        >
-          <span className="w-1 h-2 rounded-full bg-zinc-500" />
-        </motion.div>
-      </motion.div>
+          {/* Filter + demos */}
+          <div className="mt-8">
+            <div className="relative flex items-center">
+              <Search size={16} className="pointer-events-none absolute left-4 text-zinc-400" aria-hidden />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search capabilities, e.g. YouTube, translate, quiz..."
+                aria-label="Search capabilities"
+                className="h-12 w-full rounded-xl border-2 border-black bg-white pl-10 pr-20 text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#FDE047] shadow-hard-sm"
+              />
+              {query ? (
+                <button onClick={() => setQuery('')} className="absolute right-2 rounded-full border-2 border-black bg-[#FDE047] px-3 py-1 text-xs font-bold shadow-hard-sm hover:translate-y-px transition-transform">Clear</button>
+              ) : (
+                <span className="pointer-events-none absolute right-3 hidden text-xs text-zinc-400 sm:block">/ to focus</span>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Filter demos">
+              {FILTERS.map(f => (
+                <button
+                  key={f}
+                  role="tab"
+                  aria-selected={active === f}
+                  onClick={() => setActive(f)}
+                  className={`rounded-full border-2 border-black px-4 py-1.5 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FDE047] ${active === f ? 'bg-black text-white shadow-hard-sm' : 'bg-white text-black hover:bg-zinc-50'}`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map(card => (
+                <div key={card.id} className="group rounded-2xl border-2 border-black bg-white p-4 shadow-hard transition-transform hover:translate-y-px hover:shadow-hard-sm">
+                  <div className="flex items-start gap-3">
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-black ${card.accent} text-black`} aria-hidden>
+                      <card.icon size={18} strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="truncate text-sm font-bold">{card.title}</div>
+                        <span className="hidden rounded-full border border-black bg-[#FFF8D6] px-2 py-0.5 text-[10px] font-bold tracking-widest sm:inline-flex">{card.tag}</span>
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-zinc-600">{card.desc}</div>
+                      <span className="mt-2 inline-flex rounded-full border border-black bg-zinc-50 px-2 py-0.5 text-xs font-medium">{card.meta}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div className="col-span-full rounded-2xl border-2 border-black bg-white p-8 text-center shadow-hard">
+                  <p className="text-sm font-semibold">No results for “{query}” in {active}</p>
+                  <p className="mt-1 text-xs text-zinc-500">Try a different search or filter. Example: “YouTube” or “translate”.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
