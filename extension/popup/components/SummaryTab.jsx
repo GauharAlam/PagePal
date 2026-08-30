@@ -2,24 +2,27 @@ import { useState } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { supabase, isDemoMode, demoSession } from '../lib/supabase';
+import { apiRequest } from '../lib/api';
 
-export default function SummaryTab({ data, loading, error, pageContext, onRetry }) {
+export default function SummaryTab({ data, loading, error, pageContext, currentModel, onRetry }) {
   const [copied, setCopied] = useState(false);
 
   function copySummary() {
     if (!data) return;
-    const text = `# ${pageContext.title || 'Page Summary'}\n\n${data.summary}\n\nKey Points:\n${data.keyPoints?.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+    const text = `# ${pageContext.title || 'Page Summary'}\n\n${data.summary}\n\nKey Takeaways:\n${data.keyPoints?.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\n*Model: ${currentModel}*`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
+
+  const modelDisplayName = currentModel?.split('/')[1]?.split(':')[0]?.toUpperCase() || 'AI';
 
   if (loading) {
     return (
       <div className="flex h-full flex-col gap-4 overflow-y-auto p-4 animate-fade-in">
         <div className="flex items-center gap-2.5">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" aria-hidden />
-          <span className="text-xs font-semibold">Extracting & analyzing page…</span>
+          <span className="text-xs font-bold">Analyzing page with {modelDisplayName}…</span>
           <span className="ml-auto h-2 w-16 animate-pulse rounded-full bg-muted" />
         </div>
         <Card className="overflow-hidden p-4">
@@ -44,24 +47,20 @@ export default function SummaryTab({ data, loading, error, pageContext, onRetry 
   if (error?.upgrade) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center animate-fade-in">
-        <div className="rounded-full border border-warning bg-warning/10 px-3 py-1.5 text-xs font-semibold text-warning">
+        <div className="rounded-full border border-warning bg-warning/10 px-3 py-1.5 text-xs font-bold text-warning">
           Daily Limit Reached
         </div>
         <h3 className="text-sm font-bold">{error.error}</h3>
-        <p className="max-w-[260px] text-xs leading-5 text-muted-foreground">{error.message || 'Free plan includes 5 summaries per day. Upgrade for unlimited access.'}</p>
+        <p className="max-w-[260px] text-xs leading-5 text-muted-foreground">{error.message || 'Free plan limit reached. Upgrade for unlimited access or add your own key.'}</p>
         <Button
-          className="rounded-full shadow-hard-sm"
+          className="rounded-full shadow-hard-sm font-bold"
           onClick={async () => {
             let token = demoSession?.access_token;
             if (!isDemoMode) {
               const { data: { session } } = await supabase.auth.getSession();
               token = session?.access_token;
             }
-            const r = await fetch(`${import.meta.env.VITE_PROXY_URL}/api/billing/create-checkout`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            const d = await r.json();
+            const d = await apiRequest('/api/billing/create-checkout', { method: 'POST' }, token);
             if (d.url) window.open(d.url, '_blank');
           }}
         >
@@ -77,13 +76,13 @@ export default function SummaryTab({ data, loading, error, pageContext, onRetry 
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center animate-fade-in">
-        <div className="rounded-full border border-destructive bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive">
-          Error
+        <div className="rounded-full border border-destructive bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive">
+          Analysis Error
         </div>
-        <p className="max-w-[280px] text-sm font-semibold leading-5 text-foreground">{error.error || 'Something went wrong'}</p>
-        <p className="max-w-[260px] text-xs text-muted-foreground">Please ensure the page is accessible and try again.</p>
-        <Button size="sm" onClick={onRetry} className="rounded-full">
-          Retry
+        <p className="max-w-[280px] text-xs font-semibold leading-5 text-foreground">{error.error || 'Something went wrong'}</p>
+        <p className="max-w-[260px] text-[11px] text-muted-foreground">Ensure the proxy server is running and the page is accessible.</p>
+        <Button size="sm" onClick={onRetry} className="rounded-full font-bold px-5">
+          Retry Analysis
         </Button>
       </div>
     );
@@ -102,13 +101,25 @@ export default function SummaryTab({ data, loading, error, pageContext, onRetry 
           </p>
         </div>
         <div className="flex gap-2">
-          {['YouTube', 'Article', 'PDF', 'Docs'].map((t) => (
-            <span key={t} className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-              {t}
-            </span>
-          ))}
+          {['YouTube', 'Article', 'PDF', 'Docs'].map((t) => {
+            const isMatch = (pageContext.pageType === 'youtube' && t === 'YouTube') ||
+                            (pageContext.pageType === 'pdf' && t === 'PDF') ||
+                            (pageContext.pageType === 'article' && t === 'Article');
+            return (
+              <span
+                key={t}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                  isMatch
+                    ? 'border-primary bg-primary/20 text-foreground font-black'
+                    : 'border-border bg-card text-muted-foreground'
+                }`}
+              >
+                {t}
+              </span>
+            );
+          })}
         </div>
-        <Button size="default" onClick={onRetry} className="mt-2 rounded-full px-6 shadow-hard-sm font-bold">
+        <Button size="default" onClick={onRetry} className="mt-2 rounded-full px-6 shadow-hard-sm font-black">
           ✨ Summarize Page
         </Button>
       </div>

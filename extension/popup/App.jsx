@@ -8,6 +8,8 @@ import ToolsTab from './components/ToolsTab';
 import ApiKeysTab from './components/ApiKeysTab';
 import LoginModal from './components/LoginModal';
 import { supabase, isDemoMode, demoUser, demoSession } from './lib/supabase';
+import { OPENROUTER_FREE_MODELS, DEFAULT_MODEL_ID } from './components/ModelSelector';
+import { apiRequest } from './lib/api';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -20,7 +22,15 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentModel, setCurrentModel] = useState(() => {
-    try { return localStorage.getItem('pagepal-model') || 'claude-sonnet-4-6'; } catch { return 'claude-sonnet-4-6'; }
+    try {
+      const saved = localStorage.getItem('pagepal-model');
+      if (saved && OPENROUTER_FREE_MODELS.some((m) => m.id === saved)) {
+        return saved;
+      }
+      return DEFAULT_MODEL_ID;
+    } catch {
+      return DEFAULT_MODEL_ID;
+    }
   });
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('pagepal-theme') || 'dark'; } catch { return 'dark'; }
@@ -40,17 +50,26 @@ export default function App() {
   // Extract page content safely
   const extractPageContent = useCallback(async () => {
     if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
-      return { type: 'article', title: document.title, content: 'Sample development content' };
+      return { type: 'article', title: document.title || 'PagePal AI Workspace', content: 'Sample page content for analysis and Q&A' };
     }
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return { type: 'article', title: 'Current Page', content: '' };
-
     try {
-      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' });
-      if (resp?.content) return resp;
-    } catch {}
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return { type: 'article', title: 'Current Page', content: '' };
 
-    try {
+      const url = tab.url || '';
+      if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('view-source:')) {
+        return {
+          type: 'general',
+          title: tab.title || 'Browser Internal Page',
+          content: `This is a protected browser internal page (${url}). Chrome security restricts extensions from reading browser settings and extension management pages. Please navigate to any standard webpage, article, or YouTube video to analyze with PagePal AI.`,
+        };
+      }
+
+      try {
+        const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContent' });
+        if (resp?.content) return resp;
+      } catch {}
+
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => {
@@ -58,12 +77,12 @@ export default function App() {
           const title = document.title;
           if (url.includes('youtube.com/watch')) {
             const videoId = new URLSearchParams(window.location.search).get('v');
-            const desc = document.querySelector('#description-inline-expander, #description');
+            const desc = document.querySelector('#description-inline-expander, #description, meta[name="description"]');
             return {
               type: 'youtube',
               videoId,
               title: title.replace(' - YouTube', '').trim(),
-              content: desc?.innerText?.trim()?.slice(0, 10000) || `YouTube video: ${title}`,
+              content: desc?.innerText?.trim()?.slice(0, 12000) || `YouTube video: ${title}`,
             };
           }
           const selectors = ['article', 'main', '[role="main"]', '#js-pjax-container', '.post-content', '.article-content', '.entry-content', '.content', '#content', 'body'];
@@ -81,12 +100,12 @@ export default function App() {
       });
       return results?.[0]?.result || { type: 'article', title: tab.title || 'Current Page', content: '' };
     } catch (err) {
-      console.warn('Script execution failed:', err);
-      return { type: 'article', title: tab.title || 'Current Page', content: '' };
+      console.warn('Script execution caught:', err.message);
+      return { type: 'article', title: 'Current Page', content: '' };
     }
   }, []);
 
-  // Init auth & load context with background content extraction
+  // Init auth & load context
   useEffect(() => {
     let sub;
     if (isDemoMode) {
@@ -117,7 +136,7 @@ export default function App() {
               if (data?.content) {
                 setPageContent(data.content);
                 if (data.type) {
-                  setPageContext(prev => ({ ...prev, pageType: data.type, title: data.title || prev.title }));
+                  setPageContext((prev) => ({ ...prev, pageType: data.type, title: data.title || prev.title }));
                 }
               }
             }).catch(() => {});
@@ -148,12 +167,10 @@ export default function App() {
 
   async function fetchPlan(token) {
     try {
-      const res = await fetch(`${import.meta.env.VITE_PROXY_URL}/api/billing/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) setUserPlan(await res.json());
+      const planData = await apiRequest('/api/billing/status', { method: 'GET' }, token);
+      if (planData) setUserPlan(planData);
     } catch (err) {
-      console.warn('Plan fetch failed:', err);
+      console.warn('Plan fetch skipped:', err.message);
     }
   }
 
@@ -170,7 +187,7 @@ export default function App() {
     // Check local storage cache first (unless force refresh)
     if (!force && typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
-        const cacheKey = `summary_${url}`;
+        const cacheKey = `summary_${url}_${currentModel}`;
         const cached = await new Promise((res) => chrome.storage.local.get(cacheKey, (d) => res(d[cacheKey])));
         if (cached && Date.now() - cached.timestamp < 24 * 60 * 60 * 1000) {
           setSummaryData({ ...cached.data, cached: true });
@@ -184,59 +201,56 @@ export default function App() {
 
     try {
       const pageData = await extractPageContent();
-      if (!pageData?.content) throw new Error('Could not extract page content. Try refreshing the page.');
+      if (!pageData?.content) throw new Error('Could not extract page content. Please refresh the browser tab and try again.');
       setPageContent(pageData.content);
-      setPageContext(prev => ({ ...prev, pageType: pageData.type || prev.pageType, title: pageData.title || prev.title }));
+      setPageContext((prev) => ({ ...prev, pageType: pageData.type || prev.pageType, title: pageData.title || prev.title }));
 
       let token = demoSession?.access_token;
       if (!isDemoMode) {
         const { data: { session } } = await supabase.auth.getSession();
         token = session?.access_token;
-        if (!token) { setLoading(false); autoSummarizeRef.current = null; return; }
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const res = await fetch(`${import.meta.env.VITE_PROXY_URL}/api/summarize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          content: pageData.content || `YouTube video ID: ${pageData.videoId}`,
-          pageType: pageData.type,
-          title: pageData.title,
-          url,
-          model: currentModel,
-          forceRefresh: force,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 429 || data.upgrade) { setError(data); return; }
-        throw new Error(data.error || `API error ${res.status}`);
-      }
+      const data = await apiRequest(
+        '/api/summarize',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            content: pageData.content || `YouTube video ID: ${pageData.videoId}`,
+            pageType: pageData.type,
+            title: pageData.title,
+            url,
+            model: currentModel,
+            forceRefresh: force,
+          }),
+        },
+        token
+      );
+
       setSummaryData(data);
       lastSummarizedUrlRef.current = url;
 
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         try {
-          chrome.storage.local.set({ [`summary_${url}`]: { data, timestamp: Date.now() } });
+          chrome.storage.local.set({ [`summary_${url}_${currentModel}`]: { data, timestamp: Date.now() } });
         } catch {}
       }
 
       fetchPlan(token);
     } catch (err) {
       console.error('Summarize failed:', err);
-      const msg = err.name === 'AbortError' ? 'Request timed out. Please try again.' : err.message || 'Failed to summarize';
-      setError({ error: msg });
+      if (err.upgrade) {
+        setError({ upgrade: true, error: err.message, message: err.data?.message });
+      } else {
+        setError({ error: err.message || 'Failed to summarize' });
+      }
     } finally {
       setLoading(false);
       autoSummarizeRef.current = null;
     }
   }, [pageContext.url, user, summaryData, extractPageContent, currentModel]);
 
-  // Tab change listener with memory cleanup
+  // Tab change listener
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
 
@@ -286,7 +300,7 @@ export default function App() {
           user={user}
           userPlan={userPlan}
           theme={theme}
-          onThemeToggle={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          onThemeToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           onLoginClick={() => setLoginOpen(true)}
           pageContext={pageContext}
           currentModel={currentModel}
@@ -304,10 +318,17 @@ export default function App() {
         {/* Sleek Segmented Tab Bar */}
         <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
-        {/* Main Content Area (Maximizes Viewport) */}
+        {/* Main Content Area */}
         <main className="flex-1 overflow-hidden bg-background">
           <div className={activeTab === 'summary' ? 'h-full' : 'hidden h-full'} id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
-            <SummaryTab data={summaryData} loading={loading} error={error} pageContext={pageContext} onRetry={() => summarizePage(true)} />
+            <SummaryTab
+              data={summaryData}
+              loading={loading}
+              error={error}
+              pageContext={pageContext}
+              currentModel={currentModel}
+              onRetry={() => summarizePage(true)}
+            />
           </div>
           <div className={activeTab === 'chat' ? 'h-full' : 'hidden h-full'} id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
             <ChatTab
@@ -322,7 +343,14 @@ export default function App() {
             <TimelineTab timestamps={summaryData?.timestamps} pageContext={pageContext} />
           </div>
           <div className={activeTab === 'tools' ? 'h-full' : 'hidden h-full'} id="panel-tools" role="tabpanel" aria-labelledby="tab-tools">
-            <ToolsTab summaryData={summaryData} pageContext={pageContext} user={user} userPlan={userPlan} rawContent={pageContent} />
+            <ToolsTab
+              summaryData={summaryData}
+              pageContext={pageContext}
+              user={user}
+              userPlan={userPlan}
+              rawContent={pageContent}
+              currentModel={currentModel}
+            />
           </div>
           <div className={activeTab === 'keys' ? 'h-full' : 'hidden h-full'} id="panel-keys" role="tabpanel" aria-labelledby="tab-keys">
             <ApiKeysTab />

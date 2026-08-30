@@ -10,7 +10,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   ANTHROPIC_API_KEY: z.string().default(''),
   OPENROUTER_API_KEY: z.string().default(''),
-  OPENROUTER_MODEL: z.string().default('z-ai/glm-4.5'),
+  OPENROUTER_MODEL: z.string().default('openrouter/free'),
   SUPABASE_URL: z.string().default(''),
   SUPABASE_SERVICE_KEY: z.string().default(''),
   ENCRYPTION_SECRET: z.string().default(''),

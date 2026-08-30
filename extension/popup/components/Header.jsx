@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button } from './ui/button';
 import ModelSelector from './ModelSelector';
+import { apiRequest } from '../lib/api';
 
 export default function Header({ user, userPlan, theme, onThemeToggle, onLoginClick, onLogout, pageContext, currentModel, onSelectModel }) {
   const [showMenu, setShowMenu] = useState(false);
@@ -12,13 +13,11 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
     setShowMenu(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_PROXY_URL}/api/billing/create-checkout`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-      const data = await res.json();
-      if (data.url) window.open(data.url, '_blank');
-    } catch {}
+      const data = await apiRequest('/api/billing/create-checkout', { method: 'POST' }, session?.access_token);
+      if (data?.url) window.open(data.url, '_blank');
+    } catch (err) {
+      console.warn('Upgrade checkout error:', err.message);
+    }
   }
 
   const pageBadge = (pageContext?.pageType || 'page').toUpperCase();
@@ -93,16 +92,12 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full justify-start rounded-lg text-xs"
+                        className="w-full justify-start rounded-lg text-xs font-bold"
                         onClick={async () => {
                           setShowMenu(false);
                           const { data: { session } } = await supabase.auth.getSession();
-                          const r = await fetch(`${import.meta.env.VITE_PROXY_URL}/api/billing/create-portal`, {
-                            method: 'POST',
-                            headers: { Authorization: `Bearer ${session?.access_token}` },
-                          });
-                          const d = await r.json();
-                          if (d.url) window.open(d.url, '_blank');
+                          const d = await apiRequest('/api/billing/create-portal', { method: 'POST' }, session?.access_token);
+                          if (d?.url) window.open(d.url, '_blank');
                         }}
                       >
                         Manage Billing
@@ -115,7 +110,7 @@ export default function Header({ user, userPlan, theme, onThemeToggle, onLoginCl
                         setShowMenu(false);
                         onLogout();
                       }}
-                      className="w-full justify-start rounded-lg text-xs text-destructive hover:bg-destructive/10"
+                      className="w-full justify-start rounded-lg text-xs text-destructive hover:bg-destructive/10 font-bold"
                     >
                       Sign Out
                     </Button>

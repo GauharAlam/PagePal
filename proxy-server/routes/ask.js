@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import requireAuth from '../middleware/requireAuth.js';
 import { getSupabase, getAnthropic } from '../lib/supabase.js';
-import { hasOpenRouter, openRouterCreate } from '../lib/openrouter.js';
+import { hasOpenRouter, openRouterCreate, cleanThinkingTags } from '../lib/openrouter.js';
 import { validate, chatSchema, quizSchema } from '../lib/validate.js';
 import { env } from '../lib/env.js';
 import { mockChat, mockQuiz } from '../lib/demo.js';
@@ -14,7 +14,7 @@ const FREE_CHAT_LIMIT = 10;
 // Chat endpoint
 router.post('/api/chat', requireAuth, validate(chatSchema), async (req, res) => {
   try {
-    const { messages: rawMessages, context: rawContext, pageType, title: rawTitle } = req.body;
+    const { messages: rawMessages, context: rawContext, pageType, title: rawTitle, model } = req.body;
     const title = sanitizeTitle(rawTitle);
     const context = sanitizeContent(rawContext);
     const messages = rawMessages.map((m) => ({
@@ -38,43 +38,53 @@ router.post('/api/chat', requireAuth, validate(chatSchema), async (req, res) => 
       });
     }
 
-    const system = `You are PagePal AI, an intelligent sidebar assistant helping users understand and explore the webpage they are viewing.
+    const system = `You are PagePal AI, an intelligent co-pilot assisting the user with the webpage they are viewing.
 Current Page Type: ${pageType || 'general'}
 Current Page Title: "${title || 'Untitled'}"
 
 Page Content (extracted from current browser tab):
 """
-${context?.slice(0, 14000) || 'No specific page text extracted.'}
+${context?.slice(0, 15000) || 'No specific page text extracted.'}
 """
 
 Instructions:
-1. When the user asks about the page or its author/content, extract the exact answer from the Page Content above.
-2. For greetings or general questions, respond cordially and concisely.
-3. If specific details requested are not found in the extracted text, clearly state what is available on the page and answer as helpfully as possible.
-4. Use clean markdown formatting (bullet points, bold text, code blocks) when appropriate.`;
+1. Provide accurate, context-grounded, and helpful answers directly related to the page content above.
+2. If the user asks for summaries, explanations, comparisons, or specific facts, format your answer clearly with markdown formatting (bullet points, bold text, code blocks).
+3. If the user asks a question not covered by the page content, acknowledge this gently and answer from general knowledge while clarifying the distinction.
+4. Keep answers concise, clear, and direct.`;
 
     let replyText = '';
     if (useOpenRouter) {
-      logger.info(`OpenRouter GLM chat → ${env.OPENROUTER_MODEL}`);
-      const msg = await openRouterCreate({ system, messages: messages.slice(-10), max_tokens: 1000 });
-      replyText = msg.content[0].text;
+      logger.info(`OpenRouter chat → model: ${model || env.OPENROUTER_MODEL}`);
+      const msg = await openRouterCreate({
+        model,
+        system,
+        messages: messages.slice(-10),
+        max_tokens: 1500,
+        timeoutMs: 30000,
+      });
+      replyText = msg.content[0]?.text || '';
     } else {
       const anthropic = await getAnthropic();
       const msg = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
+        max_tokens: 1500,
         system,
         messages: messages.slice(-10),
       });
-      replyText = msg.content[0].text;
+      replyText = msg.content[0]?.text || '';
     }
+
+    // Clean any remaining reasoning markers
+    replyText = cleanThinkingTags(replyText);
 
     if (supabase) {
       try {
-        const { error: rpcErr } = await supabase.rpc('increment_usage', { p_user_id: req.user.id, p_field: 'daily_chats' });
-        if (rpcErr) throw rpcErr;
+        await supabase.rpc('increment_usage', { p_user_id: req.user.id, p_field: 'daily_chats' });
       } catch {
-        try { await supabase.from('user_plans').update({ daily_chats: (req.userPlan.daily_chats || 0) + 1 }).eq('user_id', req.user.id); } catch {}
+        try {
+          await supabase.from('user_plans').update({ daily_chats: (req.userPlan.daily_chats || 0) + 1 }).eq('user_id', req.user.id);
+        } catch {}
       }
     }
 
@@ -86,10 +96,10 @@ Instructions:
   }
 });
 
-// Quiz generator — Pro only
+// Quiz generator
 router.post('/api/quiz', requireAuth, validate(quizSchema), async (req, res) => {
   try {
-    const { content: rawContent, title: rawTitle } = req.body;
+    const { content: rawContent, title: rawTitle, model } = req.body;
     const title = sanitizeTitle(rawTitle);
     const content = sanitizeContent(rawContent);
 
@@ -101,44 +111,66 @@ router.post('/api/quiz', requireAuth, validate(quizSchema), async (req, res) => 
 
     let supabase = null;
     try { supabase = getSupabase(); } catch {}
-    if (supabase && req.userPlan?.plan === 'free') {
+    if (supabase && req.userPlan?.plan === 'free' && req.userPlan.daily_chats >= FREE_CHAT_LIMIT) {
       return res.status(403).json({
-        error: 'Quiz is a Pro feature',
-        message: 'Upgrade to Pro to generate quizzes from any content.',
+        error: 'Daily limit reached',
+        message: 'Daily AI generation limit reached on free tier.',
         upgrade: true,
       });
     }
 
-    const prompt = `Generate 5 multiple choice questions based on this content titled "${title}".
-Each question should test understanding of key concepts.
-Respond ONLY with valid JSON in this exact format:
-{"questions":[{"q":"question text","options":["A) option","B) option","C) option","D) option"],"answer":"A) option","explanation":"brief explanation"}]}
+    const prompt = `Generate 5 high-quality multiple choice questions based on this content titled "${title}".
+Each question should test comprehension of crucial concepts.
+Respond ONLY with valid JSON in this exact structure:
+{
+  "questions": [
+    {
+      "q": "Clear question text?",
+      "options": ["A) First option", "B) Second option", "C) Third option", "D) Fourth option"],
+      "answer": "A) First option",
+      "explanation": "Concise explanation of why this answer is correct."
+    }
+  ]
+}
 
-Content: ${content.slice(0, 8000)}`;
+Content:
+${content.slice(0, 12000)}`;
 
     let raw = '';
     if (useOpenRouter) {
-      logger.info(`OpenRouter GLM quiz → ${env.OPENROUTER_MODEL}`);
-      const msg = await openRouterCreate({ messages: [{ role: 'user', content: prompt }], max_tokens: 1500 });
-      raw = msg.content[0].text;
+      logger.info(`OpenRouter quiz → model: ${model || env.OPENROUTER_MODEL}`);
+      const msg = await openRouterCreate({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1800,
+        timeoutMs: 30000,
+      });
+      raw = msg.content[0]?.text || '';
     } else {
       const anthropic = await getAnthropic();
       const msg = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
+        max_tokens: 1800,
         messages: [{ role: 'user', content: prompt }],
       });
-      raw = msg.content[0].text;
+      raw = msg.content[0]?.text || '';
     }
 
-    const cleaned = raw.replace(/```json\n?|```/g, '').trim();
+    let cleaned = cleanThinkingTags(raw);
+    cleaned = cleaned.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
     const first = cleaned.indexOf('{');
     const last = cleaned.lastIndexOf('}');
-    const clean = first !== -1 ? cleaned.slice(first, last + 1) : cleaned;
+    const clean = first !== -1 && last !== -1 ? cleaned.slice(first, last + 1) : cleaned;
+
     try {
-      res.json(JSON.parse(clean));
-    } catch {
-      return res.status(502).json({ error: 'Quiz generation returned invalid format' });
+      const parsed = JSON.parse(clean);
+      if (!Array.isArray(parsed.questions)) {
+        throw new Error('Invalid questions array in response');
+      }
+      res.json(parsed);
+    } catch (parseErr) {
+      logger.error('Quiz JSON parse failed', { snippet: raw.slice(0, 300), error: parseErr.message });
+      res.status(502).json({ error: 'Quiz generation format error, please retry' });
     }
   } catch (err) {
     logger.error('Quiz error', { error: err.message });

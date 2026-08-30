@@ -12,7 +12,7 @@ export default defineConfig({
         { src: 'background/service_worker.js', dest: 'background' },
         { src: 'content/content_script.js', dest: 'content' },
         { src: 'content/youtube_extractor.js', dest: 'content' },
-        { src: 'assets/**/*', dest: 'assets' }
+        { src: 'assets/icons/*', dest: 'assets/icons' }
       ]
     })
   ],

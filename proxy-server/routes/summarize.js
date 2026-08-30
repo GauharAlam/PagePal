@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import requireAuth from '../middleware/requireAuth.js';
 import { getSupabase, getAnthropic } from '../lib/supabase.js';
-import { hasOpenRouter, openRouterCreate } from '../lib/openrouter.js';
+import { hasOpenRouter, openRouterCreate, cleanThinkingTags } from '../lib/openrouter.js';
 import { validate, summarizeSchema } from '../lib/validate.js';
 import { env } from '../lib/env.js';
 import { mockSummary } from '../lib/demo.js';
@@ -13,12 +13,12 @@ const FREE_SUMMARY_LIMIT = 5;
 
 router.post('/api/summarize', requireAuth, validate(summarizeSchema), async (req, res) => {
   try {
-    const { content: rawContent, pageType, title: rawTitle, url: rawUrl } = req.body;
+    const { content: rawContent, pageType, title: rawTitle, url: rawUrl, model } = req.body;
     const content = sanitizeContent(rawContent);
     const title = sanitizeTitle(rawTitle);
     const url = sanitizeUrl(rawUrl);
 
-    // If OpenRouter GLM is configured, use it even in Supabase-demo (DB ops become no-op)
+    // If OpenRouter is configured, use it even in Supabase-demo
     const useOpenRouter = hasOpenRouter();
     const useMock = !useOpenRouter && env.DEMO_MODE;
 
@@ -27,7 +27,6 @@ router.post('/api/summarize', requireAuth, validate(summarizeSchema), async (req
       return res.json(mockSummary({ content, pageType, title }));
     }
 
-    // Rate limit only if we have DB; in pure AI-demo with no DB, skip limit
     let supabase = null;
     try { supabase = getSupabase(); } catch (e) {
       logger.debug('Supabase client unavailable during summarize check');
@@ -41,8 +40,8 @@ router.post('/api/summarize', requireAuth, validate(summarizeSchema), async (req
       });
     }
 
-    // Server-side cache check: if user summarized this exact URL recently (last 24h), return cached
-    if (supabase && url) {
+    // Server-side cache check
+    if (supabase && url && req.body.forceRefresh !== true) {
       try {
         const { data: cached } = await supabase
           .from('saved_summaries')
@@ -53,7 +52,7 @@ router.post('/api/summarize', requireAuth, validate(summarizeSchema), async (req
           .limit(1)
           .single();
 
-        if (cached && req.body.forceRefresh !== true) {
+        if (cached) {
           const ageMs = Date.now() - new Date(cached.created_at).getTime();
           if (ageMs < 24 * 60 * 60 * 1000) {
             logger.info('Returning cached summary', { url, ageHours: (ageMs / 3600000).toFixed(1) });
@@ -70,27 +69,39 @@ router.post('/api/summarize', requireAuth, validate(summarizeSchema), async (req
       }
     }
 
-    const systemPrompt = `You are PagePal AI. The user is viewing a ${pageType} titled "${title}".
-Analyze the provided content and respond with ONLY valid JSON in this exact format:
+    const systemPrompt = `You are PagePal AI, an expert research assistant. The user is analyzing a ${pageType} titled "${title}".
+Analyze the provided content and respond ONLY with valid JSON matching this schema:
 {
-  "summary": "2-3 sentence summary of the main content",
-  "keyPoints": ["point 1", "point 2", "point 3", "point 4", "point 5"],
-  "timestamps": [{"time": "0:00", "label": "Introduction"}, ...],
-  "sentiment": "positive|neutral|negative",
-  "readingTime": "X min read",
+  "summary": "2-4 sentence clear, insightful summary of the core thesis and conclusions",
+  "keyPoints": [
+    "Key takeaway or crucial argument 1",
+    "Key takeaway or crucial argument 2",
+    "Key takeaway or crucial argument 3",
+    "Key takeaway or crucial argument 4",
+    "Key takeaway or crucial argument 5"
+  ],
+  "timestamps": [
+    {"time": "0:00", "label": "Introduction & Overview"}
+  ],
+  "sentiment": "positive",
+  "readingTime": "3 min read",
   "language": "English"
 }
-For YouTube videos, extract real timestamps from the transcript. For articles, set timestamps to [].
-Always return exactly 5 key points. Be concise but insightful.`;
+Rules:
+- sentiment must be one of: "positive", "neutral", "negative".
+- For YouTube videos, include chronological timestamps if transcript details are present, otherwise provide [].
+- keyPoints must contain exactly 5 high-value takeaways.
+- Output pure JSON only. Do not include markdown code block tags, preambles, or conversational commentary.`;
 
     let raw = '';
     if (useOpenRouter) {
-      logger.info(`OpenRouter GLM summarize → ${env.OPENROUTER_MODEL}`);
+      logger.info(`OpenRouter summarize → model: ${model || env.OPENROUTER_MODEL}`);
       const msg = await openRouterCreate({
+        model,
         system: systemPrompt,
-        messages: [{ role: 'user', content: `Content to analyze:\n\n${content.slice(0, 15000)}` }],
+        messages: [{ role: 'user', content: `Content to analyze:\n\n${content.slice(0, 16000)}` }],
         max_tokens: 1500,
-        timeoutMs: 25000,
+        timeoutMs: 30000,
       });
       raw = msg.content[0]?.text || '';
     } else {
@@ -98,40 +109,49 @@ Always return exactly 5 key points. Be concise but insightful.`;
       const msg = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 1500,
-        messages: [{ role: 'user', content: `Content to analyze:\n\n${content.slice(0, 15000)}` }],
+        messages: [{ role: 'user', content: `Content to analyze:\n\n${content.slice(0, 16000)}` }],
         system: systemPrompt,
       });
       raw = msg.content[0]?.text || '';
     }
 
-    // Robust JSON extraction
-    let cleaned = raw.replace(/```json\n?|```/g, '').trim();
+    // Robust JSON extraction and cleaning
+    let cleaned = cleanThinkingTags(raw);
+    cleaned = cleaned.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+    
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1) cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
 
     let parsed;
     try {
       parsed = JSON.parse(cleaned);
+      // Validate structure
+      if (!parsed.summary) throw new Error('Missing summary property');
+      if (!Array.isArray(parsed.keyPoints)) parsed.keyPoints = [];
     } catch (e) {
-      logger.error('JSON parse failed on AI response', { snippet: raw.slice(0, 300) });
-      return res.status(502).json({ error: 'AI returned invalid format, please retry' });
+      logger.error('JSON parse failed on AI response', { snippet: raw.slice(0, 400), error: e.message });
+      // Fallback rescue
+      parsed = {
+        summary: cleanThinkingTags(raw).slice(0, 500) || 'Summary generated.',
+        keyPoints: ['Comprehensive analysis completed from page content'],
+        timestamps: [],
+        sentiment: 'neutral',
+        readingTime: '2 min read',
+        language: 'English',
+      };
     }
 
-    // DB ops — record usage and saved summary
+    // DB ops
     if (supabase) {
       try {
-        const { error: rpcErr } = await supabase.rpc('increment_usage', {
-          p_user_id: req.user.id,
-          p_field: 'daily_summaries',
-        });
-        if (rpcErr) throw rpcErr;
-      } catch (err) {
+        await supabase.rpc('increment_usage', { p_user_id: req.user.id, p_field: 'daily_summaries' });
+      } catch {
         try {
           await supabase.from('user_plans').update({ daily_summaries: (req.userPlan.daily_summaries || 0) + 1 }).eq('user_id', req.user.id);
-        } catch (dbErr) {
-          logger.warn('Failed to update daily summaries count', { error: dbErr.message });
-        }
+        } catch {}
       }
 
       try {

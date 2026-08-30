@@ -61,15 +61,17 @@ describe('Sanitization & Anti-Injection Tests', () => {
 });
 
 describe('Validation Schemas Tests', () => {
-  test('summarizeSchema validates correct payload', () => {
+  test('summarizeSchema validates correct payload with model', () => {
     const valid = {
       content: 'This is the page content to summarize',
       pageType: 'article',
       title: 'Valid Title',
       url: 'https://example.com',
+      model: 'google/gemini-2.0-flash-exp:free',
     };
     const result = summarizeSchema.safeParse(valid);
     assert.ok(result.success);
+    assert.equal(result.data.model, 'google/gemini-2.0-flash-exp:free');
   });
 
   test('summarizeSchema rejects empty content', () => {
@@ -78,23 +80,35 @@ describe('Validation Schemas Tests', () => {
     assert.ok(!result.success);
   });
 
-  test('chatSchema validates messages array', () => {
+  test('chatSchema validates messages array with model', () => {
     const valid = {
       messages: [{ role: 'user', content: 'What is this article about?' }],
       context: 'Some context',
+      model: 'meta-llama/llama-3.3-70b-instruct:free',
     };
     const result = chatSchema.safeParse(valid);
     assert.ok(result.success);
+    assert.equal(result.data.model, 'meta-llama/llama-3.3-70b-instruct:free');
   });
 
   test('translateSchema requires targetLanguage and text', () => {
-    const valid = { text: 'Hello', targetLanguage: 'Spanish' };
+    const valid = { text: 'Hello', targetLanguage: 'Spanish', model: 'deepseek/deepseek-r1:free' };
     const result = translateSchema.safeParse(valid);
     assert.ok(result.success);
+    assert.equal(result.data.model, 'deepseek/deepseek-r1:free');
 
     const invalid = { text: '' };
     const resInvalid = translateSchema.safeParse(invalid);
     assert.ok(!resInvalid.success);
+  });
+});
+
+describe('Reasoning Tags Sanitization Tests', () => {
+  test('cleanThinkingTags strips <think>...</think> blocks cleanly', async () => {
+    const { cleanThinkingTags } = await import('../lib/openrouter.js');
+    const input = '<think>I should carefully analyze the text first.\nStep 1: check facts.\n</think>Here is the final answer.';
+    const output = cleanThinkingTags(input);
+    assert.equal(output, 'Here is the final answer.');
   });
 });
 

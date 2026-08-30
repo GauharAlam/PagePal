@@ -7,8 +7,10 @@ import { encrypt, decrypt } from '../lib/crypto.js';
 
 const router = Router();
 
+const ALLOWED_PROVIDERS = ['openrouter', 'anthropic', 'openai', 'gemini', 'deepseek', 'grok'];
+
 const upsertSchema = z.object({
-  provider: z.enum(['anthropic','openai','gemini','deepseek','grok']),
+  provider: z.enum(['openrouter', 'anthropic', 'openai', 'gemini', 'deepseek', 'grok']),
   api_key: z.string().min(8).max(300),
 });
 
@@ -24,7 +26,7 @@ router.get('/api/keys', requireAuth, async (req, res) => {
       const m = demoStore.get(req.user.id) || new Map();
       const list = [...m.entries()].map(([provider, key]) => ({
         provider,
-        masked: key.slice(0,4) + '…' + key.slice(-4),
+        masked: key.slice(0, 4) + '…' + key.slice(-4),
         created_at: new Date().toISOString(),
       }));
       return res.json({ keys: list, demo: true });
@@ -32,17 +34,16 @@ router.get('/api/keys', requireAuth, async (req, res) => {
     const supabase = getSupabase();
     const { data, error } = await supabase.from('user_api_keys').select('provider, api_key, created_at').eq('user_id', req.user.id);
     if (error) throw error;
-    const keys = (data||[]).map(r => {
-      // Decrypt key, then mask for display
+    const keys = (data || []).map((r) => {
       let rawKey;
       try {
         rawKey = decrypt(r.api_key);
       } catch {
-        rawKey = r.api_key; // Legacy unencrypted key
+        rawKey = r.api_key;
       }
       return {
         provider: r.provider,
-        masked: rawKey.slice(0,4) + '…' + rawKey.slice(-4),
+        masked: rawKey.slice(0, 4) + '…' + rawKey.slice(-4),
         created_at: r.created_at,
       };
     });
@@ -65,7 +66,6 @@ router.post('/api/keys', requireAuth, async (req, res) => {
       m.set(provider, api_key);
       return res.json({ success: true, provider, demo: true });
     }
-    // Encrypt the API key before storing
     const encryptedKey = encrypt(api_key);
     const supabase = getSupabase();
     const { error } = await supabase.from('user_api_keys').upsert({
@@ -85,7 +85,7 @@ router.post('/api/keys', requireAuth, async (req, res) => {
 // DELETE /api/keys/:provider
 router.delete('/api/keys/:provider', requireAuth, async (req, res) => {
   const provider = req.params.provider;
-  if (!['anthropic','openai','gemini','deepseek','grok'].includes(provider)) return res.status(400).json({ error: 'Invalid provider' });
+  if (!ALLOWED_PROVIDERS.includes(provider)) return res.status(400).json({ error: 'Invalid provider' });
   try {
     if (isDemo()) {
       demoStore.get(req.user.id)?.delete(provider);

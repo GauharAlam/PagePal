@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase, isDemoMode, demoSession } from '../lib/supabase';
-import { Button } from './ui/button';
 import MarkdownView from './ui/MarkdownView';
+import { apiRequest } from '../lib/api';
 
 const PROMPTS = ['3 key bullets', 'Main arguments?', 'Quiz me', 'Explain simply', 'Key takeaways'];
 
@@ -92,36 +92,36 @@ export default function ChatTab({ pageContext, summaryData, user, onExtractConte
       }
 
       const token = await getToken();
-      const res = await fetch(`${import.meta.env.VITE_PROXY_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          messages: next.filter((m) => m.role !== 'system').map((m) => ({ role: m.role, content: m.content })),
-          context: contextContent || '',
-          pageType: pageContext.pageType,
-          title: pageContext.title,
-          model: currentModel,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok && data.upgrade) {
-        const upgradeMsg = { role: 'assistant', content: `⚠️ ${data.error}: ${data.message}`, timestamp: new Date() };
-        const updated = [...next, upgradeMsg];
-        setMessages(updated);
-        persistChat(updated);
-        return;
-      }
-      if (!res.ok) throw new Error(data.error || 'Request failed');
+      const data = await apiRequest(
+        '/api/chat',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            messages: next.filter((m) => m.role !== 'system').map((m) => ({ role: m.role, content: m.content })),
+            context: contextContent || '',
+            pageType: pageContext.pageType,
+            title: pageContext.title,
+            model: currentModel,
+          }),
+        },
+        token
+      );
 
       const assistantMsg = { role: 'assistant', content: data.reply, timestamp: new Date() };
       const updated = [...next, assistantMsg];
       setMessages(updated);
       persistChat(updated);
     } catch (err) {
-      const errorMsg = { role: 'assistant', content: `Error: ${err.message}`, timestamp: new Date() };
-      const updated = [...next, errorMsg];
-      setMessages(updated);
+      if (err.upgrade) {
+        const upgradeMsg = { role: 'assistant', content: `⚠️ ${err.message}: ${err.data?.message || 'Daily chat limit reached.'}`, timestamp: new Date() };
+        const updated = [...next, upgradeMsg];
+        setMessages(updated);
+        persistChat(updated);
+      } else {
+        const errorMsg = { role: 'assistant', content: `Error: ${err.message}`, timestamp: new Date() };
+        const updated = [...next, errorMsg];
+        setMessages(updated);
+      }
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -142,7 +142,7 @@ export default function ChatTab({ pageContext, summaryData, user, onExtractConte
 
   return (
     <div className="flex h-full flex-col justify-between">
-      {/* Messages list (takes 75%+ height) */}
+      {/* Messages list */}
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
@@ -157,7 +157,7 @@ export default function ChatTab({ pageContext, summaryData, user, onExtractConte
                 <div>
                   <MarkdownView content={m.content} />
                   <div className="mt-1 flex items-center justify-between pt-1 border-t border-border/30 text-[10px] text-muted-foreground">
-                    <span>PagePal</span>
+                    <span className="font-semibold">PagePal AI</span>
                     <button
                       onClick={() => copyMessage(m.content, i)}
                       className="hover:text-foreground transition-colors font-medium"
