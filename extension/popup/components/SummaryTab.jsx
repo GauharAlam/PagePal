@@ -5,13 +5,6 @@ import { supabase, isDemoMode, demoSession } from '../lib/supabase';
 import { apiRequest } from '../lib/api';
 import MarkdownView from './ui/MarkdownView';
 
-const SUGGESTED_FOLLOWUPS = [
-  '🔍 Explain key takeaway #1 deeper',
-  '⚖️ What are the main criticisms / counterpoints?',
-  '💡 Provide real-world practical examples',
-  '🚀 What are the future implications?',
-];
-
 export default function SummaryTab({
   data,
   loading,
@@ -239,137 +232,82 @@ export default function SummaryTab({
       : 'bg-amber-500/10 border-amber-500/20';
 
   return (
-    <div className="flex h-full flex-col gap-3.5 overflow-y-auto p-3 animate-fade-in">
-      {/* Top action bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Page Summary</span>
-          {data.cached && (
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground" title="Loaded from cache">
-              Cached
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={copySummary}
-            className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold transition-colors hover:bg-accent"
-          >
-            {copied ? 'Copied ✓' : 'Copy'}
-          </button>
-          <button
-            onClick={onRetry}
-            className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title="Re-analyze page"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Summary Card */}
-      <Card className="rounded-xl p-4 shadow-sm">
-        <p className="text-xs leading-6 text-foreground font-normal">{data.summary}</p>
-      </Card>
-
-      {/* Key Takeaways */}
-      {data.keyPoints?.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Key Takeaways</div>
-          <div className="flex flex-col gap-1.5">
-            {data.keyPoints.map((point, i) => (
-              <div key={i} className="flex gap-2.5 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-accent/40">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[11px] font-bold shadow-xs">
-                  {i + 1}
-                </span>
-                <span className="flex-1 text-xs leading-5 text-foreground">{point}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Metadata pills */}
-      <div className="grid grid-cols-3 gap-2 pt-1">
-        <div className={`rounded-xl border p-2.5 text-center ${sentimentBg}`}>
-          <div className={`text-xs font-bold uppercase tracking-wider ${sentimentColor}`}>{data.sentiment || 'neutral'}</div>
-          <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">Sentiment</div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-2.5 text-center">
-          <div className="text-xs font-bold">{data.readingTime || '2 min'}</div>
-          <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">Read time</div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-2.5 text-center">
-          <div className="text-xs font-bold">{data.language || 'English'}</div>
-          <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">Language</div>
-        </div>
-      </div>
-
+    <div className="flex h-full flex-col overflow-hidden animate-fade-in">
       {/* ========================================================================= */}
-      {/* 💬 TALK LONGER / ASK FOLLOW-UP SECTION                                    */}
+      {/* 📜 SCROLLABLE UPPER AREA (Summary, Takeaways, Metrics, Q&A Thread)         */}
       {/* ========================================================================= */}
-      <div className="mt-2 flex flex-col gap-2.5 border-t border-border/40 pt-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
+        {/* Top action bar */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs">💬</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Ask Follow-Up / Deep Dive
-            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Page Summary</span>
+            {data.cached && (
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground" title="Loaded from cache">
+                Cached
+              </span>
+            )}
           </div>
-          {onNavigateToChat && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => onNavigateToChat()}
-              className="text-[10px] font-bold text-primary hover:underline"
+              onClick={copySummary}
+              className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold transition-colors hover:bg-accent"
             >
-              Full Chat Tab →
+              {copied ? 'Copied ✓' : 'Copy'}
             </button>
-          )}
+            <button
+              onClick={onRetry}
+              className="rounded-lg border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title="Re-analyze page"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {/* 1-Click AI-Generated Content Suggestions */}
-        <div className="flex flex-wrap gap-1.5">
-          {aiFollowups.slice(0, 4).map((suggestion, idx) => (
-            <button
-              key={idx}
-              disabled={asking}
-              onClick={() => handleAskFollowup(suggestion)}
-              className="rounded-full border border-border/70 bg-card/80 px-2.5 py-1 text-left text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-foreground flex items-center gap-1"
-            >
-              <span>✨</span>
-              <span>{suggestion}</span>
-            </button>
-          ))}
-        </div>
+        {/* Summary Card */}
+        <Card className="rounded-xl p-4 shadow-sm">
+          <p className="text-xs leading-6 text-foreground font-normal">{data.summary}</p>
+        </Card>
 
-        {/* Input Bar */}
-        <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card p-1 shadow-xs focus-within:ring-1 focus-within:ring-ring">
-          <input
-            type="text"
-            value={questionInput}
-            onChange={(e) => setQuestionInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleAskFollowup();
-              }
-            }}
-            placeholder="Ask anything about this summary…"
-            className="flex-1 bg-transparent px-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
-            disabled={asking}
-          />
-          <Button
-            size="sm"
-            disabled={asking || !questionInput.trim()}
-            onClick={() => handleAskFollowup()}
-            className="h-7 rounded-lg px-3 text-xs font-bold shadow-hard-sm shrink-0"
-          >
-            {asking ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" /> : 'Ask'}
-          </Button>
+        {/* Key Takeaways */}
+        {data.keyPoints?.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Key Takeaways</div>
+            <div className="flex flex-col gap-1.5">
+              {data.keyPoints.map((point, i) => (
+                <div key={i} className="flex gap-2.5 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-accent/40">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[11px] font-bold shadow-xs">
+                    {i + 1}
+                  </span>
+                  <span className="flex-1 text-xs leading-5 text-foreground">{point}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Metadata pills */}
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          <div className={`rounded-xl border p-2.5 text-center ${sentimentBg}`}>
+            <div className={`text-xs font-bold uppercase tracking-wider ${sentimentColor}`}>{data.sentiment || 'neutral'}</div>
+            <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">Sentiment</div>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-2.5 text-center">
+            <div className="text-xs font-bold">{data.readingTime || '2 min'}</div>
+            <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">Read time</div>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-2.5 text-center">
+            <div className="text-xs font-bold">{data.language || 'English'}</div>
+            <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">Language</div>
+          </div>
         </div>
 
         {/* Inline Follow-Up Q&A Stream */}
         {followups.length > 0 && (
-          <div className="flex flex-col gap-3 pt-1">
+          <div className="space-y-3 border-t border-border/40 pt-3">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span>💬</span> Follow-Up Discussion
+            </div>
             {followups.map((item, idx) => (
               <Card key={idx} className="rounded-xl p-3 shadow-sm animate-fade-in border border-border/70">
                 <div className="flex items-start justify-between gap-2 border-b border-border/30 pb-1.5 mb-2">
@@ -402,6 +340,68 @@ export default function SummaryTab({
             <div ref={followupsEndRef} />
           </div>
         )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 📌 FIXED STICKY BOTTOM SECTION (AI Suggestions + Input Bar)                */}
+      {/* ========================================================================= */}
+      <div className="border-t border-border/60 bg-card/85 backdrop-blur-xl p-2.5 space-y-2 shadow-lg shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              ✨ Suggested Follow-Ups
+            </span>
+          </div>
+          {onNavigateToChat && (
+            <button
+              onClick={() => onNavigateToChat()}
+              className="text-[10px] font-bold text-primary hover:underline"
+            >
+              Full Chat Tab →
+            </button>
+          )}
+        </div>
+
+        {/* 1-Click AI-Generated Content Suggestions */}
+        <div className="flex flex-col gap-1.5 max-h-28 overflow-y-auto pr-1">
+          {aiFollowups.slice(0, 3).map((suggestion, idx) => (
+            <button
+              key={idx}
+              disabled={asking}
+              onClick={() => handleAskFollowup(suggestion)}
+              className="rounded-xl border border-border/70 bg-background/70 px-2.5 py-1.5 text-left text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/10 hover:text-foreground flex items-start gap-1.5 shadow-xs"
+            >
+              <span className="text-amber-500 shrink-0 mt-0.5">✨</span>
+              <span className="line-clamp-2 leading-tight">{suggestion}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Input Bar */}
+        <div className="flex items-center gap-1.5 rounded-xl border border-border bg-background p-1 shadow-xs focus-within:ring-1 focus-within:ring-ring">
+          <input
+            type="text"
+            value={questionInput}
+            onChange={(e) => setQuestionInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleAskFollowup();
+              }
+            }}
+            placeholder="Ask anything about this summary…"
+            className="flex-1 bg-transparent px-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
+            disabled={asking}
+          />
+          <Button
+            size="sm"
+            disabled={asking || !questionInput.trim()}
+            onClick={() => handleAskFollowup()}
+            className="h-7 rounded-lg px-3 text-xs font-bold shadow-hard-sm shrink-0"
+          >
+            {asking ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" /> : 'Ask'}
+          </Button>
+        </div>
       </div>
     </div>
   );
