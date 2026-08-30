@@ -16,7 +16,7 @@ export async function apiRequest(endpoint, options = {}, token = null) {
   }
 
   const controller = new AbortController();
-  const timeoutMs = options.timeoutMs || 35000;
+  const timeoutMs = options.timeoutMs || 55000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {

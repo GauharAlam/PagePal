@@ -1,7 +1,7 @@
 import { env } from './env.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_TIMEOUT_MS = 35000;
+const DEFAULT_TIMEOUT_MS = 50000;
 export const DEFAULT_FREE_MODEL = 'openrouter/free';
 
 export function hasOpenRouter(customKey = null) {

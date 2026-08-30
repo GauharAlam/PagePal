@@ -1,181 +1,121 @@
-// content/content_script.js
-// Extracts page content and responds to messages from the popup
-
+// PagePal AI content script - Injects floating button & handles text extraction safely
 (function () {
-  'use strict';
+  if (window.__pagepal_injected) return;
+  window.__pagepal_injected = true;
 
-  // Listen for messages from the popup
+  // Listen for extraction requests from popup or background
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'getPageContent') {
-      const content = extractPageContent();
-      sendResponse(content);
-    }
-
-    if (request.action === 'getYouTubeInfo') {
-      const videoId = new URLSearchParams(window.location.search).get('v');
-      const title = document.title.replace(' - YouTube', '').trim();
-      const description = document.querySelector('#description-inline-expander, #description, meta[name="description"]');
-      sendResponse({
-        videoId,
-        title,
-        description: description?.textContent?.trim()?.slice(0, 5000) || ''
-      });
-    }
-
-    if (request.action === 'jumpToTime') {
-      const video = document.querySelector('video');
-      if (video) {
-        video.currentTime = request.seconds;
-        video.play();
+      try {
+        const content = extractCleanPageContent();
+        sendResponse(content);
+      } catch (err) {
+        sendResponse({ type: 'general', title: document.title, content: '' });
       }
-      sendResponse({ success: !!video });
     }
-
-    // Required for async sendResponse
     return true;
   });
 
-  function extractPageContent() {
+  function extractCleanPageContent() {
     const url = window.location.href;
-    const title = document.title;
+    const title = document.title || 'Untitled';
 
-    // YouTube: extract video metadata
+    // YouTube handling
     if (url.includes('youtube.com/watch')) {
       const videoId = new URLSearchParams(window.location.search).get('v');
+      const descEl = document.querySelector('#description-inline-expander, #description, meta[name="description"]');
+      const channelEl = document.querySelector('#owner #channel-name, #upload-info #channel-name');
       return {
         type: 'youtube',
         videoId,
         title: title.replace(' - YouTube', '').trim(),
-        content: getYouTubePageText()
+        channel: channelEl?.innerText?.trim() || '',
+        content: descEl?.innerText?.trim()?.slice(0, 15000) || `YouTube video: ${title}`,
       };
     }
 
-    // PDF: limited extraction
-    if (url.endsWith('.pdf') || url.includes('/pdf/')) {
+    // PDF viewer handling
+    if (url.endsWith('.pdf') || document.querySelector('embed[type="application/pdf"]')) {
       return {
         type: 'pdf',
-        title,
-        content: document.body.innerText?.slice(0, 15000) || 'PDF content could not be extracted.'
+        title: title || 'PDF Document',
+        content: 'PDF document opened in browser.',
       };
     }
 
-    // Article/General: use Readability-like extraction
-    return {
-      type: 'article',
-      title,
-      content: extractArticleContent()
-    };
-  }
-
-  function extractArticleContent() {
-    // Try semantic elements first
-    const selectors = [
+    // Article & General pages
+    const mainSelectors = [
       'article',
       'main',
       '[role="main"]',
+      '#js-pjax-container',
       '.post-content',
       '.article-content',
       '.entry-content',
       '.content',
       '#content',
-      '#main-content',
-      '.story-body'
+      '.markdown-body',
     ];
 
-    for (const selector of selectors) {
-      const el = document.querySelector(selector);
-      if (el && el.innerText.length > 200) {
-        return cleanText(el.innerText).slice(0, 15000);
+    for (const sel of mainSelectors) {
+      const el = document.querySelector(sel);
+      if (el && el.innerText && el.innerText.trim().length > 150) {
+        return {
+          type: 'article',
+          title,
+          content: el.innerText.trim().slice(0, 18000),
+        };
       }
     }
 
-    // Fallback: body text with cleanup
-    return cleanText(document.body.innerText).slice(0, 15000);
+    // Fallback: body text
+    const bodyText = (document.body?.innerText || '').trim();
+    return {
+      type: 'article',
+      title,
+      content: bodyText.slice(0, 18000),
+    };
   }
 
-  function getYouTubePageText() {
-    // Extract whatever text context is available on the page
-    const descEl = document.querySelector('#description-inline-expander, #description');
-    const commentsEls = document.querySelectorAll('#content-text');
-    
-    let text = '';
-    if (descEl) text += 'Description: ' + descEl.innerText.trim() + '\n\n';
-    
-    // Get first few comments for context
-    const comments = Array.from(commentsEls).slice(0, 5);
-    if (comments.length) {
-      text += 'Top comments:\n';
-      comments.forEach(c => {
-        text += '- ' + c.innerText.trim().slice(0, 200) + '\n';
-      });
-    }
-
-    return text.slice(0, 5000);
-  }
-
-  function cleanText(text) {
-    return text
-      .replace(/\s+/g, ' ')
-      .replace(/\n\s*\n/g, '\n\n')
-      .trim();
-  }
-
-  // Inject Left-Side Floating Trigger
+  // Inject floating PagePal trigger button
   function injectFloatingTrigger() {
-    if (window !== window.top) return; // Only inject in main frame
-    if (document.getElementById('pagepal-sidebar-trigger-host')) return; // Avoid duplicates
+    if (document.getElementById('pagepal-floating-host')) return;
 
     const host = document.createElement('div');
-    host.id = 'pagepal-sidebar-trigger-host';
-    host.style.position = 'fixed';
-    host.style.left = '0';
-    host.style.top = '48%';
-    host.style.zIndex = '2147483647';
-    host.style.pointerEvents = 'none';
+    host.id = 'pagepal-floating-host';
+    host.style.cssText = 'all: initial; position: fixed; bottom: 20px; right: 20px; z-index: 2147483646;';
 
-    const shadow = host.attachShadow({ mode: 'open' });
+    const shadow = host.attachShadow({ mode: 'closed' });
     shadow.innerHTML = `
       <style>
         .pagepal-trigger {
-          pointer-events: auto;
+          all: unset;
+          cursor: pointer;
           display: flex;
           align-items: center;
-          gap: 7px;
-          background: #fde047;
-          color: #09090b;
-          border: 1.5px solid #18181b;
-          border-left: none;
-          border-radius: 0 12px 12px 0;
-          padding: 8px 12px 8px 8px;
+          gap: 6px;
+          padding: 7px 13px 7px 10px;
+          border-radius: 9999px;
+          background: #FDE047;
+          color: #0A0A0A;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           font-size: 12px;
-          font-weight: 700;
-          cursor: pointer;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-          transform: translateX(-4px);
+          font-weight: 800;
+          border: 2px solid #0A0A0A;
+          box-shadow: 3px 3px 0px #0A0A0A;
+          transition: transform 0.12s ease, box-shadow 0.12s ease;
           user-select: none;
         }
         .pagepal-trigger:hover {
-          transform: translateX(0);
-          background: #facc15;
-          box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-          padding-right: 14px;
+          transform: translate(-1px, -1px);
+          box-shadow: 4px 4px 0px #0A0A0A;
         }
         .pagepal-trigger:active {
-          transform: scale(0.96) translateX(0);
+          transform: translate(2px, 2px);
+          box-shadow: 1px 1px 0px #0A0A0A;
         }
         .pagepal-icon {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 22px;
-          height: 22px;
-          background: #18181b;
-          color: #fde047;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 800;
+          font-size: 14px;
           line-height: 1;
         }
         .pagepal-label {
@@ -192,9 +132,12 @@
     shadow.getElementById('open-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       try {
-        chrome.runtime.sendMessage({ action: 'openSidePanel' });
+        if (!chrome?.runtime?.id) {
+          return;
+        }
+        chrome.runtime.sendMessage({ action: 'openSidePanel' }).catch(() => {});
       } catch (err) {
-        console.error('PagePal trigger click error:', err);
+        // Silently catch context invalidation from dev reload
       }
     });
 
