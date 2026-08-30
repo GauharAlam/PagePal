@@ -16,7 +16,7 @@ export default function App() {
     <div className="min-h-screen bg-[#FFFDf5] text-black overflow-x-hidden">
       <AuthSync />
       <Navbar />
-      <main>
+      <main className="pt-20 sm:pt-24">
         <Hero />
         <Stats />
         <Features />

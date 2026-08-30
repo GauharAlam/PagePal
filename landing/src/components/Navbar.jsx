@@ -24,16 +24,19 @@ export default function Navbar() {
     e.preventDefault();
     setOpen(false);
     const el = document.querySelector(href);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (el) {
+      const topOffset = el.getBoundingClientRect().top + window.pageYOffset - 100;
+      window.scrollTo({ top: topOffset, behavior: 'smooth' });
+    }
   };
 
   return (
-    <header className="sticky top-4 z-50 px-3 sm:px-6">
+    <header className="fixed top-4 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
       <div
-        className={`mx-auto max-w-6xl transition-all duration-300 rounded-2xl border-2 border-black overflow-hidden ${
+        className={`pointer-events-auto mx-auto max-w-6xl transition-all duration-300 rounded-2xl border-2 border-black overflow-hidden ${
           scrolled
-            ? 'bg-white/60 backdrop-blur-2xl shadow-hard supports-[backdrop-filter]:bg-white/50'
-            : 'bg-white/40 backdrop-blur-xl shadow-hard-sm supports-[backdrop-filter]:bg-white/30'
+            ? 'bg-white/50 backdrop-blur-2xl shadow-hard supports-[backdrop-filter]:bg-white/40'
+            : 'bg-white/25 backdrop-blur-xl shadow-hard-sm supports-[backdrop-filter]:bg-white/15'
         }`}
       >
         <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
@@ -77,7 +80,7 @@ export default function Navbar() {
               href={GITHUB_REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-black bg-white/70 backdrop-blur-sm shadow-hard-sm hover:translate-y-px transition-all"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 border-black bg-white/60 backdrop-blur-md shadow-hard-sm hover:translate-y-px transition-all"
               aria-label="GitHub Repository"
             >
               <Github size={16} />
@@ -95,7 +98,7 @@ export default function Navbar() {
           {/* Mobile hamburger button */}
           <button
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-black bg-white/70 backdrop-blur-sm lg:hidden shadow-hard-sm"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-black bg-white/60 backdrop-blur-md lg:hidden shadow-hard-sm"
             aria-label={open ? 'Close menu' : 'Open menu'}
           >
             <span className="text-base font-bold">{open ? '✕' : '☰'}</span>
@@ -104,7 +107,7 @@ export default function Navbar() {
 
         {/* Mobile menu dropdown */}
         {open && (
-          <div id="mobile-menu" className="border-t-2 border-black bg-white/85 backdrop-blur-xl px-4 py-4 lg:hidden animate-fade-in">
+          <div id="mobile-menu" className="border-t-2 border-black bg-white/85 backdrop-blur-2xl px-4 py-4 lg:hidden animate-fade-in">
             <div className="flex flex-col gap-1.5">
               {LINKS.map((l) => (
                 <a
